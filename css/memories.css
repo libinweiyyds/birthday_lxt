@@ -1,13 +1,21 @@
-/* ==================== 场景2：回忆（外层上下+内层左右） ==================== */
-#memories{
-  padding:0;
-  flex-direction:column;
-  align-items:stretch;
-  justify-content:flex-start;
-  gap:0;
-}
+/* ==================== 场景2:回忆 — Render Layer Architecture ====================
+   整个场景由 7 个固定 layer 组成(在 carousel-area 内部):
+     L0 Background      .layer-bg        紫色渐变底,固定
+     L1 Ambient         .layer-ambient   暖光径向叠加
+     L2 Particles       .layer-particles 由 JS 在固定容器内 spawn 粒子(限制数量)
+     L3 Photo           .layer-photo     camera-rig + 9 张 cards
+     L4 Effects         .layer-effects   7 个 fx-* 元素,通过 CSS 变量 --fx-op 控制可见性
+     L5 Typography      .layer-typography 歌词层(在 L3 上方)
+     L6 UI              click zones / progress bar(在 carousel 外部)
 
-/* 外层上下布局容器 */
+   关键约束:
+   - 每个 fx-* 元素始终存在;Style 切换只修改 --fx-op / --fx-tx / --fx-blend 等 CSS 变量
+   - 卡片视觉不再由 .style-X class 决定;由 JS 通过 inline style setProperty(--card-bg) 等传入
+   - 没有任何元素使用 filter:blur 或 backdrop-filter 作用于大容器
+   - 没有任何 animation keyframes 在装饰层自动播放(全部由 JS Director 驱动)
+*/
+
+/* ==================== 布局容器(必须存在,否则 carousel 塌陷) ==================== */
 .s1-main-container{
   position:relative;
   width:100%;
@@ -16,7 +24,7 @@
   flex-direction:column;
 }
 
-/* 顶部标题区 - 移除后仅保留跳过按钮 */
+/* 顶部跳过按钮区 */
 .memories-header{
   position:relative;
   width:100%;
@@ -25,12 +33,6 @@
   padding:0;
   text-align:center;
   z-index:6;
-}
-.memories-title{
-  font-family:'Ma Shan Zheng',cursive;font-size:2rem;
-  color:var(--pink-200);text-shadow:var(--text-glow);letter-spacing:0.2em;
-  opacity:0;animation:memFade 1.5s ease 0.5s forwards;
-  margin:0;line-height:2.4rem;
 }
 .skip-btn{
   position:absolute;top:1rem;right:1.5rem;
@@ -44,7 +46,7 @@
 .skip-btn:hover{color:#fff;text-shadow:0 0 12px rgba(255,182,193,0.6)}
 @keyframes memFade{from{opacity:0;transform:translateY(-15px)}to{opacity:0.85;transform:translateY(0)}}
 
-/* 主场景：左右布局 */
+/* 主场景:左右布局 */
 .s1-scene{
   flex:1;
   position:relative;
@@ -56,7 +58,7 @@
   min-height:0;
 }
 
-/* 左侧黑胶唱片区：垂直居中 */
+/* 左侧黑胶唱片区 */
 .vinyl-area{
   position:relative;
   z-index:20;
@@ -70,11 +72,9 @@
   justify-content:center;
   opacity:0;animation:memFade 1.5s ease 0.8s forwards;
 }
-
 .vinyl-record{
   position:relative;
-  width:200px;
-  height:200px;
+  width:200px;height:200px;
   border-radius:50%;
   background:radial-gradient(circle,#1a1a1a 0%,#0a0a0a 70%,#000 100%);
   box-shadow:0 0 40px rgba(255,182,193,0.25),0 0 20px rgba(0,0,0,0.6);
@@ -82,11 +82,9 @@
   flex-shrink:0;
 }
 @keyframes diskRotate{from{transform:rotate(0)}to{transform:rotate(360deg)}}
-
 .vinyl-record::before{
   content:'';position:absolute;top:0;left:0;right:0;bottom:0;border-radius:50%;
-  background:
-    repeating-radial-gradient(circle at center,transparent 0,transparent 6px,rgba(255,255,255,0.04) 6px,rgba(255,255,255,0.04) 7px);
+  background:repeating-radial-gradient(circle at center,transparent 0,transparent 6px,rgba(255,255,255,0.04) 6px,rgba(255,255,255,0.04) 7px);
 }
 .vinyl-record::after{
   content:'';position:absolute;top:50%;left:50%;
@@ -95,7 +93,6 @@
   transform:translate(-50%,-50%);
   box-shadow:0 0 0 1px rgba(255,182,193,0.1);
 }
-
 .vinyl-center-image{
   position:absolute;top:50%;left:50%;
   width:60%;height:60%;
@@ -118,7 +115,6 @@
   box-shadow:0 0 0 1px rgba(255,255,255,0.1);
   z-index:3;
 }
-
 .vinyl-arm{
   position:absolute;width:120px;height:120px;
   top:0;right:-10px;
@@ -147,7 +143,6 @@
   border-radius:4px;
   box-shadow:0 2px 6px rgba(0,0,0,0.4);
 }
-
 .vinyl-shadow{
   position:absolute;bottom:-18px;left:50%;
   width:160px;height:18px;border-radius:50%;
@@ -156,10 +151,7 @@
   pointer-events:none;
 }
 
-/* 右侧轮播区
-   注意:不要用 @keyframes 让 carousel-area 从 opacity:0 过渡到 1,
-   因为 animation 期间 translateY(-15px) 与 perspective 复合时
-   可能在某些 GPU 上出现投影矩形蒙版。这里直接给最终状态。 */
+/* carousel-area:作为所有 layer 的容器 */
 .carousel-area{
   position:relative;
   flex:1;
@@ -168,56 +160,105 @@
   align-items:center;
   justify-content:center;
   min-width:0;
-  opacity:1;
-  /* 关键:为子节点建立真实 3D 空间 */
+  overflow:hidden;
   perspective:1400px;
   perspective-origin:50% 45%;
-  overflow:hidden;
 }
-/* camera 层：所有卡片都在这里，camera 的 transform 制造摄影机移动 */
+
+/* 通用 layer 样式:fixed inset:0 覆盖整个视口,与 camera 解耦。
+   - 不再用 absolute,避免父容器宽度(flex:1 carousel-area)裁切背景
+   - 不创建合成层(will-change 只用 opacity,不用 transform)
+   - camera transform 只作用于 .layer-photo 内的 .camera-rig */
+.layer{
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  will-change:opacity;
+}
+
+/* ===== Layer 0/1: Background + Ambient =====
+   背景渐变交给 .layer-bg / .layer-ambient(它们已经 fixed 全视口)。
+   #memories 自身不再设 background,避免与 .layer-bg 叠加产生颜色不一致。 */
+#memories{
+  background:none;
+}
+.layer-bg{
+  background:
+    radial-gradient(ellipse at 20% 30%,rgba(255,182,193,0.18) 0%,transparent 50%),
+    radial-gradient(ellipse at 80% 70%,rgba(200,162,200,0.15) 0%,transparent 50%);
+}
+.layer-ambient{
+  background:radial-gradient(ellipse at center,transparent 30%,rgba(26,10,46,0.4) 100%);
+}
+
+/* ===== Layer 2: Particles ===== */
+/* 粒子由 JS 在固定容器内创建,使用 .ambient-particle class,数量限制 12 个 */
+.layer-particles{}
+.ambient-particle{
+  position:absolute;
+  width:4px;height:4px;border-radius:50%;
+  background:rgba(255,220,235,0.6);
+  pointer-events:none;
+  will-change:transform,opacity;
+  /* transform 完全由 JS 每帧写入 */
+}
+
+/* ===== Layer 3: Photo Scene =====
+   .layer-photo 留在 .carousel-area 内,override .layer 的 fixed,
+   保留 absolute + 父级 perspective(1400px),让 3D 卡片正常运动。
+   氛围层已 fixed 全视口,camera 不再影响背景。 */
+.layer-photo{
+  position:absolute;
+}
 .camera-rig{
-  position:relative;
-  width:100%;
-  height:100%;
+  position:absolute;
+  inset:0;
   transform-style:preserve-3d;
   will-change:transform;
 }
-/* 卡片堆栈:不再控制位置(由 RAF 设置 transform),只提供布局容器 */
 .memory-cards-stack{
-  position:relative;
-  width:100%;
-  height:100%;
+  position:absolute;
+  inset:0;
   transform-style:preserve-3d;
 }
 
-/* ==================== 卡片基础样式 ====================
-   重要:基础样式不设 background / border / box-shadow,
-   否则在 RAF 写入 transform 形成合成层时,会暴露为"半透明矩形蒙层"。
-   卡片"视觉"完全由各 Style 类单独定义;此处只保留几何与定位。 */
+/* ==================== Memory Card 基础样式 ====================
+   不再使用 .style-X class。
+   所有视觉参数由 inline CSS 变量驱动:
+     --card-bg, --card-border, --card-shadow, --card-radius,
+     --card-blend, --card-filter, --card-aspect
+*/
 .memory-card{
   position:absolute;
-  top:50%;
-  left:50%;
-  border-radius:20px;
-  background:transparent;
-  border:0;
-  box-shadow:none;
+  top:50%;left:50%;
+  width:300px;height:400px;
+  border-radius:var(--card-radius,20px);
+  background:var(--card-bg,transparent);
+  border:var(--card-border,0 solid transparent);
+  box-shadow:var(--card-shadow,none);
   overflow:hidden;
   opacity:0;
-  width:300px;height:400px;
-  transform:translate3d(-50%,-50%,0) scale(0.5);
   pointer-events:none;
-  will-change:transform,opacity,filter;
+  will-change:transform,opacity;
+  transform:translate3d(-50%,-50%,0);
   transform-style:preserve-3d;
+  /* 不使用 mix-blend-mode / filter:blur */
 }
-.memory-card img{
-  width:100%;height:100%;object-fit:cover;display:block;
-  will-change:transform,opacity,filter;
-  border-radius:inherit;
-  /* 默认 base filter:仅在 style-X 提供额外值时叠加。
-     用 var(--img-blur) 让 RAF 写入的远景 blur 平滑过渡。 */
-  filter:blur(var(--img-blur,0px)) saturate(var(--img-saturate,1)) brightness(var(--img-bright,1));
+
+/* 双层 image buffer:每张 card 内嵌两个 .card-img 层,A/B 交替显示 */
+.memory-card .card-img{
+  position:absolute;
+  inset:0;
+  background-size:cover;
+  background-position:center;
+  background-repeat:no-repeat;
+  opacity:0;
+  transition:opacity 0.65s cubic-bezier(0.22,0.61,0.36,1);
+  will-change:opacity;
+  /* 各 style 设置的滤镜(由 JS 通过 --card-img-filter 传入) */
+  filter:var(--card-img-filter,none);
 }
+.memory-card .card-img.visible{opacity:1}
 .memory-card .caption{
   position:absolute;bottom:0;left:0;width:100%;
   padding:12px 10px 10px;
@@ -228,333 +269,53 @@
   opacity:0;
   transition:opacity 0.6s ease;
 }
-.memory-card.show-caption .caption{opacity:1}
+.memory-card .caption.visible{opacity:1}
 
-/* 图片内部切换滑入(CINEMATIC 风格使用) */
-.memory-card.active img.switching{
-  animation:imgSlideIn 0.55s cubic-bezier(0.22,0.61,0.36,1);
+/* ===== Layer 4: Effects ===== */
+.layer-effects{
+  /* 7 个 fx-* 元素全部 absolute 0 尺寸,定位由各自 transform 决定 */
 }
-@keyframes imgSlideIn{
-  0%  { opacity:0; transform:scale(0.92) translateX(18px); filter:blur(4px); }
-  60% { opacity:1; }
-  100%{ opacity:1; transform:scale(1)    translateX(0);    filter:blur(0);   }
-}
-
-/* ===== 共享 .style-cinematic(默认) =====
-   关键:卡片本体仍然保持透明(避免远景卡片变成白色矩形蒙层),
-   "卡片感"的视觉只在主卡上叠 .is-main 时呈现。 */
-.memory-card.style-cinematic{
-  background:transparent;
-  border:0;
-  box-shadow:none;
-}
-.memory-card.style-cinematic.is-main{
-  background:rgba(255,245,248,0.95);
-  border:2px solid #FFB7C5;
-  box-shadow:0 8px 32px rgba(0,0,0,0.15);
-}
-
-/* ===== Style 02 FILM STRIP =====
-   卡片本体透明,穿孔与暗边框用 inset shadow 画在图片周围,
-   远景卡片的 inset shadow 在低 opacity 下会变成"黑色矩形蒙层",
-   因此仅在主卡(s.is-main)上显示暗边框,其它卡片保持完全透明。 */
-.memory-card.style-film{
-  border-radius:0;
-  background:transparent;
-  border:none;
-  box-shadow:none;
-  padding:0;
-}
-.memory-card.style-film.is-main{
-  box-shadow:inset 0 0 0 12px rgba(0,0,0,0.85);
-}
-.memory-card.style-film img{
-  width:100%;
-  height:100%;
-  border-radius:0;
-  filter:blur(var(--img-blur,0px)) saturate(var(--img-saturate,1)) brightness(var(--img-bright,1)) contrast(1.05);
-  position:relative;
-  z-index:1;
-  margin:0;
-}
-/* 穿孔带仅在主卡显示 */
-.memory-card.style-film.is-main::before,
-.memory-card.style-film.is-main::after{
-  content:'';
+.layer-effects .fx{
   position:absolute;
-  left:0;right:0;
-  height:6px;
-  background-image:radial-gradient(circle at 8px 3px,#000 0 1.6px,transparent 1.8px);
-  background-size:16px 6px;
-  background-repeat:repeat-x;
-  background-color:transparent;
-  z-index:2;
-}
-.memory-card.style-film.is-main::before{top:0}
-.memory-card.style-film.is-main::after{bottom:0;transform:scaleY(-1)}
-
-/* ===== Style 03 POLAROID =====
-   主卡显示完整 Polaroid 视觉,远景卡片去除投影与白底,
-   避免"白色矩形蒙层"。 */
-.memory-card.style-polaroid{
-  background:transparent;
-  border:none;
-  padding:0;
-  box-shadow:none;
-  border-radius:4px;
-}
-.memory-card.style-polaroid.is-main{
-  background:#fff;
-  border:1px solid rgba(0,0,0,0.08);
-  padding:14px 14px 50px;
-  box-shadow:0 18px 40px rgba(0,0,0,0.35),0 4px 10px rgba(0,0,0,0.18);
-}
-.memory-card.style-polaroid img{
-  width:100%;
-  height:calc(100% - 50px);
-  border-radius:2px;
-}
-.memory-card.style-polaroid .caption{
-  position:absolute;
-  bottom:8px;left:14px;right:14px;
-  background:none;
-  font-family:'Long Cang','Ma Shan Zheng',cursive;
-  color:#3a2a40;
-  font-size:14px;
-  text-align:center;
-  opacity:1;
-  padding:0;
-}
-.memory-card.style-polaroid.show-caption .caption{opacity:1}
-
-/* ===== Style 04 EDITORIAL ===== */
-.memory-card.style-editorial{
-  background:transparent;
-  border:none;
-  border-radius:0;
-  box-shadow:none;
-  padding:0;
-}
-.memory-card.style-editorial img{
-  width:100%;height:100%;
-  filter:blur(var(--img-blur,0px)) contrast(1.1) saturate(var(--img-saturate,1)) brightness(var(--img-bright,1));
-}
-
-/* ===== Style 05 COLLAGE =====
-   主卡显示完整 Collage 视觉,远景卡片纯图片。 */
-.memory-card.style-collage{
-  background:transparent;
-  border:none;
-  padding:0;
-  box-shadow:none;
-}
-.memory-card.style-collage.is-main{
-  background:#fff;
-  border:2px solid #fff;
-  box-shadow:0 12px 30px rgba(0,0,0,0.3);
-}
-.memory-card.style-collage img{border-radius:0}
-
-/* ===== Style 06 DREAM =====
-   dream 风格本身就不该有"硬阴影",全部走柔光 */
-.memory-card.style-dream{
-  background:transparent;
-  border:none;
-  border-radius:18px;
-  box-shadow:none;
-  padding:0;
-}
-.memory-card.style-dream img{
-  filter:blur(var(--img-blur,0px)) saturate(var(--img-saturate,1)) brightness(var(--img-bright,1));
-}
-
-/* ===== Style 07 GLITCH =====
-   不要给卡片整块黑底,改为透明 + neon 边框阴影,避免"黑矩形"蒙层。 */
-.memory-card.style-glitch{
-  background:transparent;
-  border:none;  /* 远景卡片不显示边框 */
-  border-radius:0;
-  padding:0;
-  box-shadow:none;
-}
-.memory-card.style-glitch.is-main{
-  border:1px solid rgba(255,80,140,0.6);
-  box-shadow:0 0 18px rgba(255,80,140,0.35);
-}
-.memory-card.style-glitch img{
-  filter:blur(var(--img-blur,0px)) contrast(1.15) saturate(var(--img-saturate,1)) brightness(var(--img-bright,1));
-}
-
-/* ===== Style 08 CONSTELLATION =====
-   远景卡片完全融入星空,只主卡有边框光晕 */
-.memory-card.style-constellation{
-  background:transparent;
-  border:none;
-  border-radius:6px;
-  box-shadow:none;
-  padding:0;
-}
-.memory-card.style-constellation.is-main{
-  border:1px solid rgba(255,255,255,0.18);
-  box-shadow:0 0 40px rgba(200,180,255,0.35);
-}
-.memory-card.style-constellation img{
-  filter:blur(var(--img-blur,0px)) brightness(var(--img-bright,1)) saturate(var(--img-saturate,1));
-}
-
-/* ==================== 装饰层:每种 Style 的环境元素 ==================== */
-/* 容器：覆盖在卡片下方,接收 style-name class */
-.style-decor{
-  position:absolute;inset:0;
+  inset:0;
   pointer-events:none;
-  opacity:0;
-  transition:opacity 0.9s ease;
-  z-index:5;
+  opacity:var(--fx-op,0);
+  will-change:opacity;
+  /* 关键:全部用 CSS 变量控制,JS 不再 append 新节点 */
 }
-.style-decor.active{opacity:1}
 
-/* FILM:渐暗氛围 + 噪点 + 暖色光晕
-   注意:任何装饰层都不得使用 mix-blend-mode / filter:blur,
-   这两个属性会在 GPU 合成层边界暴露矩形蒙版。
-   改用纯透明 radial-gradient / linear-gradient,让 CSS 渲染时直接 alpha 合成。 */
-.style-decor.film{
-  background:
-    linear-gradient(180deg,rgba(0,0,0,0.0) 0%,rgba(0,0,0,0.18) 50%,rgba(0,0,0,0.0) 100%),
-    radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,0.18) 100%);
-}
-.style-decor.film .film-grain{
-  position:absolute;inset:0;
+/* fx-grain:film grain,纯 radial-gradient 重复,不用 mix-blend-mode */
+.fx-grain{
   background-image:
-    radial-gradient(rgba(255,255,255,0.05) 1px,transparent 1px),
-    radial-gradient(rgba(255,255,255,0.03) 1px,transparent 1px);
+    radial-gradient(rgba(255,255,255,0.06) 1px,transparent 1.5px),
+    radial-gradient(rgba(0,0,0,0.06) 1px,transparent 1.5px);
   background-size:3px 3px,5px 5px;
   background-position:0 0,1px 1px;
-  opacity:0.5;
-  animation:filmGrainShift 0.45s steps(4) infinite;
 }
-@keyframes filmGrainShift{
-  0%{transform:translate(0,0)}
-  25%{transform:translate(-3px,2px)}
-  50%{transform:translate(2px,-2px)}
-  75%{transform:translate(-2px,-3px)}
-  100%{transform:translate(0,0)}
-}
-/* light-leak:用大半径 radial-gradient,不再用 filter:blur */
-.style-decor.film .light-leak{
-  position:absolute;
-  width:120%;height:120%;
-  top:-10%;left:-10%;
+
+/* fx-light-leak:暖色径向 */
+.fx-light-leak{
   background:
-    radial-gradient(ellipse at 30% 50%,rgba(255,180,140,0.28) 0%,transparent 35%),
-    radial-gradient(ellipse at 70% 50%,rgba(255,120,180,0.18) 0%,transparent 40%);
-  animation:lightLeakMove 8s ease-in-out infinite alternate;
-}
-@keyframes lightLeakMove{
-  from{transform:translateX(-15%)}
-  to  {transform:translateX(15%)}
+    radial-gradient(ellipse at 30% 50%,rgba(255,180,140,0.30) 0%,transparent 40%),
+    radial-gradient(ellipse at 70% 50%,rgba(255,120,180,0.20) 0%,transparent 45%);
+  width:120%;height:120%;top:-10%;left:-10%;
 }
 
-/* POLAROID:胶带 */
-.style-decor.polaroid{
-  background:transparent;
-}
-.style-decor.polaroid .tape{
-  position:absolute;
-  width:110px;height:22px;
-  background:rgba(255,255,230,0.45);
-  box-shadow:0 2px 6px rgba(0,0,0,0.1);
-  border:1px solid rgba(255,255,255,0.2);
-}
-.style-decor.polaroid .tape-1{top:8%;left:12%;transform:rotate(-12deg)}
-.style-decor.polaroid .tape-2{top:75%;right:8%;transform:rotate(8deg)}
-.style-decor.polaroid .tape-3{bottom:6%;left:38%;transform:rotate(-4deg)}
-
-/* EDITORIAL:杂志版式参考线 */
-.style-decor.editorial{
-  background:transparent;
-}
-.style-decor.editorial .ed-grid-h{
-  position:absolute;left:5%;right:5%;
-  height:1px;background:rgba(255,240,245,0.08);
-}
-.style-decor.editorial .ed-grid-v{
-  position:absolute;top:5%;bottom:5%;
-  width:1px;background:rgba(255,240,245,0.08);
+/* fx-vignette:暗角 */
+.fx-vignette{
+  background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,0.45) 100%);
 }
 
-/* COLLAGE:网格参考(透明度极低,避免"矩形蒙层"错觉) */
-.style-decor.collage{
-  background:transparent;
-}
-.style-decor.collage::before{
-  content:'';
-  position:absolute;inset:8% 5%;
-  background:
-    linear-gradient(90deg,transparent 49.85%,rgba(255,240,245,0.10) 50%,transparent 50.15%),
-    linear-gradient(0deg,transparent 49.85%,rgba(255,240,245,0.10) 50%,transparent 50.15%);
-  background-size:50% 100%,100% 50%;
-  background-position:center,center;
-  background-repeat:no-repeat;
-  opacity:0.35;
-}
-
-/* DREAM:雾、粒子、soft glow(无 blur,无 mix-blend-mode) */
-.style-decor.dream{
-  background:
-    radial-gradient(ellipse at 30% 30%,rgba(255,200,220,0.18) 0%,transparent 55%),
-    radial-gradient(ellipse at 70% 70%,rgba(190,180,255,0.18) 0%,transparent 55%),
-    radial-gradient(ellipse at 50% 100%,rgba(255,220,180,0.10) 0%,transparent 60%);
-}
-.style-decor.dream .mist{
-  position:absolute;
-  width:120%;height:120%;
-  top:-10%;left:-10%;
-  background:radial-gradient(ellipse at center,rgba(255,255,255,0.04) 0%,transparent 55%);
-  /* 用大半径 radial-gradient 模拟软雾,不再 filter:blur */
-  animation:dreamMist 18s ease-in-out infinite alternate;
-}
-@keyframes dreamMist{
-  from{transform:translate(-10%,-5%) scale(1)}
-  to  {transform:translate(10%,8%) scale(1.15)}
-}
-
-/* GLITCH:扫描线 + RGB 偏移(无 mix-blend-mode) */
-.style-decor.glitch{
-  background:transparent;
-}
-.style-decor.glitch .scanlines{
-  position:absolute;inset:0;
+/* fx-scanlines:扫描线(全屏重复线性渐变) */
+.fx-scanlines{
   background:repeating-linear-gradient(0deg,
-    rgba(0,0,0,0) 0 2px,
-    rgba(255,80,140,0.07) 2px 4px);
-  /* 不使用 mix-blend-mode,直接以半透明叠加 */
-  animation:scanShift 6s linear infinite;
-}
-@keyframes scanShift{
-  from{background-position:0 0}
-  to  {background-position:0 100px}
-}
-.style-decor.glitch::after{
-  content:'';
-  position:absolute;inset:0;
-  background:linear-gradient(120deg,
-    rgba(255,0,80,0.05) 0%,
-    rgba(0,255,255,0.05) 50%,
-    rgba(255,0,80,0.05) 100%);
-  /* 不使用 mix-blend-mode */
-  animation:rgbSplit 3.5s ease-in-out infinite;
-}
-@keyframes rgbSplit{
-  0%,100%{opacity:0.6;transform:translateX(0)}
-  50%   {opacity:1;transform:translateX(8px)}
+    rgba(255,80,140,0.08) 0 1px,
+    transparent 1px 3px);
+  width:100%;height:100%;
 }
 
-/* CONSTELLATION:星点 + 连接线 */
-.style-decor.constellation{
-  background:transparent;
-}
-.style-decor.constellation .stars{
-  position:absolute;inset:0;
+/* fx-stars:星点 + 连接线(用 CSS 绘制,不用 image) */
+.fx-stars{
   background-image:
     radial-gradient(1.5px 1.5px at 12% 18%,#fff 99%,transparent 100%),
     radial-gradient(1px 1px at 28% 65%,#fff 99%,transparent 100%),
@@ -565,49 +326,52 @@
     radial-gradient(1px 1px at 18% 50%,#fff 99%,transparent 100%),
     radial-gradient(1.5px 1.5px at 92% 60%,#fff 99%,transparent 100%);
   background-repeat:no-repeat;
-  animation:twinkle 4s ease-in-out infinite;
 }
-@keyframes twinkle{
-  0%,100%{opacity:0.7}
-  50%   {opacity:1}
-}
-.style-decor.constellation .const-line{
-  position:absolute;
-  width:200px;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.5),transparent);
-  top:30%;left:20%;
-  transform:rotate(-15deg);
-  opacity:0.5;
-}
-.style-decor.constellation .const-line.b{top:70%;left:55%;transform:rotate(12deg)}
 
-/* ==================== 歌词样式(随 Style 变化) ==================== */
+/* fx-particles:漂浮粒子点(由 JS 写入 position) */
+.fx-particles{}
+
+/* fx-rgb-split:全屏彩色光晕(GLITCH 用,通过 mask-image 让中心透明、边缘有彩色) */
+.fx-rgb-split{
+  background:linear-gradient(115deg,
+    rgba(255,0,80,0.10) 0%,
+    transparent 30%,
+    transparent 70%,
+    rgba(0,255,255,0.10) 100%);
+}
+
+/* ===== Layer 5: Typography ===== */
+.layer-typography{
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  padding-bottom:62px;
+}
 .lyrics-display{
-  position:absolute;
-  bottom:52px;
-  left:0;width:100%;
   text-align:center;
-  z-index:6;
-  pointer-events:none;
+  width:100%;
 }
 .lyrics-text{
+  display:inline-block;
   font-family:'Long Cang',cursive;
   font-size:1.6rem;
   color:rgba(255,183,197,0.95);
   padding:8px 28px;
-  display:inline-block;
   letter-spacing:0.15em;
   text-shadow:0 2px 8px rgba(45,27,46,0.6),0 0 16px rgba(255,182,193,0.5);
-  transition:opacity 0.85s cubic-bezier(0.22,0.61,0.36,1),transform 0.85s cubic-bezier(0.22,0.61,0.36,1),filter 0.85s cubic-bezier(0.22,0.61,0.36,1),font-size 0.85s ease,letter-spacing 0.85s ease,color 0.85s ease,font-family 0.85s ease;
+  /* 字体参数由 body.style-* 设置 */
+  transition:opacity 0.85s cubic-bezier(0.22,0.61,0.36,1),transform 0.85s cubic-bezier(0.22,0.61,0.36,1),filter 0.85s cubic-bezier(0.22,0.61,0.36,1);
   max-width:90%;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
+  opacity:0;
 }
+.lyrics-text.show{opacity:1}
 .lyrics-text.fading{opacity:0;transform:translateY(-10px) scale(0.98);filter:blur(6px)}
 
-/* 各 Style 下的歌词 typography */
-body.style-cinematic  .lyrics-text{font-family:'Long Cang',cursive;font-size:1.6rem;letter-spacing:0.15em}
+/* 各 Style 下的 typography(由 body.style-X 触发) */
+body.style-cinematic  .lyrics-text{font-family:'Long Cang',cursive;font-size:1.6rem;letter-spacing:0.15em;color:rgba(255,183,197,0.95)}
 body.style-film       .lyrics-text{font-family:'Quicksand','PingFang SC',sans-serif;font-size:1.3rem;letter-spacing:0.4em;text-transform:uppercase;color:rgba(255,235,225,0.85)}
 body.style-polaroid   .lyrics-text{font-family:'Long Cang',cursive;font-size:1.7rem;letter-spacing:0.18em;color:rgba(255,210,225,0.95)}
 body.style-editorial  .lyrics-text{font-family:'Quicksand','PingFang SC',sans-serif;font-size:3.2rem;letter-spacing:0.04em;color:#fff;text-shadow:0 4px 16px rgba(45,27,46,0.7),0 0 24px rgba(255,182,193,0.4);font-weight:600;max-width:80%}
@@ -616,14 +380,21 @@ body.style-dream      .lyrics-text{font-family:'Long Cang',cursive;font-size:1.8
 body.style-glitch     .lyrics-text{font-family:'Quicksand','PingFang SC',sans-serif;font-size:1.4rem;letter-spacing:0.25em;color:rgba(255,210,225,0.85);text-shadow:0 0 8px rgba(255,80,140,0.5)}
 body.style-constellation .lyrics-text{font-family:'Quicksand','PingFang SC',sans-serif;font-size:1.1rem;letter-spacing:0.5em;color:rgba(230,235,255,0.9)}
 
-/* ==================== 进度条（保留） ==================== */
+/* ===== Layer 6: UI ===== */
+.memory-left-zone,.memory-right-zone{
+  position:absolute;top:0;
+  width:50%;height:100%;
+  z-index:60;cursor:pointer;
+}
+.memory-left-zone{left:0}
+.memory-right-zone{right:0}
+
 .progress-bar{
   position:absolute;
   bottom:0;left:0;width:100%;
   padding:1rem 2rem 1.5rem;
-  z-index:30;
+  z-index:60;
 }
-.player-bar{display:none}
 .progress-track{
   width:100%;height:8px;border-radius:4px;
   background:rgba(255,255,255,0.08);
@@ -677,16 +448,7 @@ body.style-constellation .lyrics-text{font-family:'Quicksand','PingFang SC',sans
   font-size:0.8rem;color:rgba(255,240,245,0.5);letter-spacing:0.1em;
 }
 
-.memory-left-zone,.memory-right-zone{
-  position:absolute;top:0;
-  width:50%;height:100%;
-  z-index:30;cursor:pointer;
-}
-.memory-left-zone{left:0}
-.memory-right-zone{right:0}
-
-/* 减少动画偏好:压缩 3D 透视强度 */
+/* 减少动画偏好 */
 @media (prefers-reduced-motion: reduce){
   .carousel-area{perspective:none;perspective-origin:50% 50%}
-  .memory-cards-stack,.memory-card{transform-style:flat}
 }

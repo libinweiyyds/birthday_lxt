@@ -37,6 +37,28 @@
 <!-- ===== 场景2：回忆 ===== -->
 <section id="memories" class="scene">
   <div class="s1-main-container">
+    <!--
+      Global Atmosphere Layers — 全视口 fixed,与 camera 完全解耦。
+      渲染顺序从下到上:background → ambient → particles → effects → scene(cards) → typography → UI。
+      camera transform 只作用于 .carousel-area 内的 .camera-rig,不影响背景。
+    -->
+    <!-- Layer 0 Background -->
+    <div class="layer layer-bg" id="layerBg"></div>
+    <!-- Layer 1 Ambient Light -->
+    <div class="layer layer-ambient" id="layerAmbient"></div>
+    <!-- Layer 2 Particles -->
+    <div class="layer layer-particles" id="layerParticles"></div>
+    <!-- Layer 4 Photo Effects(取代 7 个 style-decor) -->
+    <div class="layer layer-effects" id="layerEffects">
+      <div class="fx-grain" id="fxGrain"></div>
+      <div class="fx-light-leak" id="fxLightLeak"></div>
+      <div class="fx-vignette" id="fxVignette"></div>
+      <div class="fx-scanlines" id="fxScanlines"></div>
+      <div class="fx-stars" id="fxStars"></div>
+      <div class="fx-particles" id="fxParticles"></div>
+      <div class="fx-rgb-split" id="fxRgbSplit"></div>
+    </div>
+
     <div class="memories-header">
       <button class="skip-btn" id="skipBtn">跳过 →</button>
     </div>
@@ -57,49 +79,31 @@
       </div>
 
       <div class="carousel-area">
-        <!-- 装饰层：每种 Style 一层,由 Style Engine 切 .active -->
-        <div class="style-decor film" id="decorFilm">
-          <div class="film-grain"></div>
-          <div class="light-leak"></div>
+        <!--
+          carousel-area 只承担 Photo World(camera + cards)。
+          所有氛围层已提升到 .s1-main-container 直接子级,position:fixed inset:0,
+          覆盖整个视口,与 camera transform 完全解耦,左右无缝。
+        -->
+        <!-- Layer 3 Photo Scene(camera-rig + cards) -->
+        <div class="layer layer-photo">
+          <div class="camera-rig" id="cameraRig">
+            <div class="memory-cards-stack" id="memoryCarousel"></div>
+          </div>
         </div>
-        <div class="style-decor polaroid" id="decorPolaroid">
-          <div class="tape tape-1"></div>
-          <div class="tape tape-2"></div>
-          <div class="tape tape-3"></div>
-        </div>
-        <div class="style-decor editorial" id="decorEditorial">
-          <div class="ed-grid-h" style="top:20%"></div>
-          <div class="ed-grid-h" style="top:50%"></div>
-          <div class="ed-grid-h" style="top:80%"></div>
-          <div class="ed-grid-v" style="left:33%"></div>
-          <div class="ed-grid-v" style="left:66%"></div>
-        </div>
-        <div class="style-decor collage" id="decorCollage"></div>
-        <div class="style-decor dream" id="decorDream">
-          <div class="mist"></div>
-          <div class="mist" style="animation-delay:-7s;opacity:0.6"></div>
-        </div>
-        <div class="style-decor glitch" id="decorGlitch">
-          <div class="scanlines"></div>
-        </div>
-        <div class="style-decor constellation" id="decorConstellation">
-          <div class="stars"></div>
-          <div class="const-line"></div>
-          <div class="const-line b"></div>
-        </div>
-
-        <div class="camera-rig" id="cameraRig">
-          <div class="memory-cards-stack" id="memoryCarousel"></div>
-        </div>
+        <!-- Layer 6 UI(点击区) -->
         <div class="memory-left-zone" id="memoryLeftZone"></div>
         <div class="memory-right-zone" id="memoryRightZone"></div>
       </div>
     </div>
 
-    <div class="lyrics-display">
-      <p class="lyrics-text" id="lyricsText"></p>
+    <!-- Layer 5 Typography(歌词) — 在 cards 之上 -->
+    <div class="layer layer-typography">
+      <div class="lyrics-display">
+        <p class="lyrics-text" id="lyricsText"></p>
+      </div>
     </div>
 
+    <!-- 进度条(Layer 6 UI) -->
     <div class="progress-bar">
       <div class="progress-track" id="progressTrack">
         <div class="progress-fill" id="progressFill"></div>
