@@ -396,6 +396,10 @@
       c.el.classList.remove(old.cssClass);
       c.el.classList.add(nw.cssClass);
     });
+    // 主图加 .is-main(用于 polaroid / collage / dream / glitch / constellation / film 仅主卡显示 box-shadow 等)
+    pool.forEach((c, i) => {
+      c.el.classList.toggle('is-main', i === 0);
+    });
     // decor
     if(decorMap[old.name]) decorMap[old.name].classList.remove('active');
     if(decorMap[nw.name])  decorMap[nw.name].classList.add('active');
@@ -575,9 +579,16 @@
         ` translate3d(${cur.x.toFixed(2)}px, ${cur.y.toFixed(2)}px, ${cur.z.toFixed(2)}px)` +
         ` rotateX(${cur.rotX.toFixed(3)}deg) rotateY(${cur.rotY.toFixed(3)}deg) rotateZ(${cur.rotZ.toFixed(3)}deg)` +
         ` scale(${cur.scale.toFixed(4)})`;
-      c.el.style.filter = `blur(${cur.blur.toFixed(2)}px) brightness(${cur.brightness.toFixed(3)}) saturate(${cur.saturate.toFixed(3)})`;
+      // 关键:卡片本体保持纯几何层(不写 filter),所有视觉滤镜都交给 img,
+      // 避免对卡片整体 filter 暴露矩形蒙层。
       c.el.style.opacity = cur.opacity.toFixed(3);
       c.el.style.zIndex = Math.round(1000 + cur.z);
+      // 把 blur / brightness / saturate 都通过 CSS 变量传给 img,
+      // 由各 style-X 的 .memory-card.style-X img 规则把 var(--img-blur) 拼到自己的 filter 里。
+      const imgBlur = Math.min(cur.blur, 1.5);
+      c.img.style.setProperty('--img-blur', `${imgBlur.toFixed(2)}px`);
+      c.img.style.setProperty('--img-bright', cur.brightness.toFixed(3));
+      c.img.style.setProperty('--img-saturate', cur.saturate.toFixed(3));
     });
     rafId = requestAnimationFrame(tick);
   }
@@ -596,9 +607,13 @@
         c.el.style.transform =
           `translate3d(-50%, -50%, 0) translate3d(${px.x}px, ${px.y}px, ${slot.z}px)` +
           ` rotateX(${slot.rotX}deg) rotateY(${slot.rotY}deg) rotateZ(${slot.rotZ}deg) scale(${slot.scale})`;
-        c.el.style.filter = `blur(${slot.blur}px) brightness(${slot.brightness}) saturate(${slot.saturate})`;
         c.el.style.opacity = slot.opacity;
         c.el.style.zIndex = Math.round(1000 + slot.z);
+        // 滤镜全部交给 img,通过 CSS 变量
+        const imgBlur = Math.min(slot.blur, 1.5);
+        c.img.style.setProperty('--img-blur', `${imgBlur}px`);
+        c.img.style.setProperty('--img-bright', slot.brightness);
+        c.img.style.setProperty('--img-saturate', slot.saturate);
       });
       applyStyleClass(st.to);
       syncCardPhotos();
