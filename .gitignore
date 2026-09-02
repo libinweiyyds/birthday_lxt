@@ -1,0 +1,55 @@
+# ====================
+# 操作系统
+# ====================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ====================
+# 编辑器 / IDE
+# ====================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ====================
+# 日志与临时文件
+# ====================
+*.log
+*.tmp
+*.bak
+*.cache
+AGENTS.md
+# ====================
+# Node / 前端构建
+# ====================
+node_modules/
+dist/
+build/
+out/
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+
+# ====================
+# 环境变量与密钥
+# ====================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ====================
+# 其他
+# ====================
+*.local
+coverage/

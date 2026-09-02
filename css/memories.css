@@ -1,0 +1,338 @@
+/* ==================== 场景2：回忆（外层上下+内层左右） ==================== */
+#memories{
+  padding:0;
+  flex-direction:column;
+  align-items:stretch;
+  justify-content:flex-start;
+  gap:0;
+}
+
+/* 外层上下布局容器 */
+.s1-main-container{
+  position:relative;
+  width:100%;
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+
+/* 顶部标题区 - 移除后仅保留跳过按钮 */
+.memories-header{
+  position:relative;
+  width:100%;
+  height:0;
+  flex-shrink:0;
+  padding:0;
+  text-align:center;
+  z-index:6;
+}
+.memories-title{
+  font-family:'Ma Shan Zheng',cursive;font-size:2rem;
+  color:var(--pink-200);text-shadow:var(--text-glow);letter-spacing:0.2em;
+  opacity:0;animation:memFade 1.5s ease 0.5s forwards;
+  margin:0;line-height:2.4rem;
+}
+.skip-btn{
+  position:absolute;top:1rem;right:1.5rem;
+  padding:0.4rem 1.2rem;border-radius:25px;
+  background:transparent;
+  border:none;
+  color:var(--pink-100);font-size:0.85rem;cursor:pointer;
+  letter-spacing:0.1em;transition:all 0.3s;
+  opacity:0;animation:memFade 1.5s ease 1s forwards;
+}
+.skip-btn:hover{color:#fff;text-shadow:0 0 12px rgba(255,182,193,0.6)}
+@keyframes memFade{from{opacity:0;transform:translateY(-15px)}to{opacity:0.85;transform:translateY(0)}}
+
+/* 主场景：左右布局 */
+.s1-scene{
+  flex:1;
+  position:relative;
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  justify-content:flex-start;
+  padding:0 2rem;
+  min-height:0;
+}
+
+/* 左侧黑胶唱片区：垂直居中 */
+.vinyl-area{
+  position:relative;
+  z-index:20;
+  flex:0 0 auto;
+  width:30%;
+  max-width:280px;
+  min-width:200px;
+  align-self:center;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  opacity:0;animation:memFade 1.5s ease 0.8s forwards;
+}
+
+.vinyl-record{
+  position:relative;
+  width:200px;
+  height:200px;
+  border-radius:50%;
+  background:radial-gradient(circle,#1a1a1a 0%,#0a0a0a 70%,#000 100%);
+  box-shadow:0 0 40px rgba(255,182,193,0.25),0 0 20px rgba(0,0,0,0.6);
+  animation:diskRotate 4s linear infinite;
+  flex-shrink:0;
+}
+@keyframes diskRotate{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+
+.vinyl-record::before{
+  content:'';position:absolute;top:0;left:0;right:0;bottom:0;border-radius:50%;
+  background:
+    repeating-radial-gradient(circle at center,transparent 0,transparent 6px,rgba(255,255,255,0.04) 6px,rgba(255,255,255,0.04) 7px);
+}
+.vinyl-record::after{
+  content:'';position:absolute;top:50%;left:50%;
+  width:110px;height:110px;border-radius:50%;
+  background:radial-gradient(circle,#000 0%,#000 50%,transparent 51%);
+  transform:translate(-50%,-50%);
+  box-shadow:0 0 0 1px rgba(255,182,193,0.1);
+}
+
+.vinyl-center-image{
+  position:absolute;top:50%;left:50%;
+  width:60%;height:60%;
+  border-radius:50%;
+  transform:translate(-50%,-50%);
+  overflow:hidden;
+  box-shadow:0 0 0 2px rgba(255,182,193,0.4),0 4px 20px rgba(0,0,0,0.5);
+  z-index:2;
+}
+.vinyl-center-image img{
+  width:100%;height:100%;object-fit:cover;display:block;
+  border-radius:50%;
+  transition:opacity 0.5s ease-in-out,transform 0.5s ease-in-out;
+}
+.vinyl-center-image::after{
+  content:'';position:absolute;top:50%;left:50%;
+  width:12px;height:12px;border-radius:50%;
+  background:radial-gradient(circle,#222 0%,#000 100%);
+  transform:translate(-50%,-50%);
+  box-shadow:0 0 0 1px rgba(255,255,255,0.1);
+  z-index:3;
+}
+
+.vinyl-arm{
+  position:absolute;width:120px;height:120px;
+  top:0;right:-10px;
+  transform-origin:30px 30px;
+  z-index:21;pointer-events:none;
+  opacity:0;animation:memFade 1.5s ease 1.2s forwards;
+}
+.vinyl-arm-body{
+  position:absolute;width:7px;height:120px;
+  background:linear-gradient(180deg,#d4d4d4,#8a8a8a 50%,#5a5a5a);
+  border-radius:4px;
+  top:30px;left:30px;
+  transform-origin:50% 0;
+  box-shadow:0 2px 8px rgba(0,0,0,0.3);
+}
+.vinyl-arm-pivot{
+  position:absolute;top:18px;left:18px;
+  width:22px;height:22px;border-radius:50%;
+  background:radial-gradient(circle,#aaa 0%,#666 60%,#444 100%);
+  box-shadow:0 2px 6px rgba(0,0,0,0.4);
+}
+.vinyl-arm-head{
+  position:absolute;bottom:0;left:18px;
+  width:28px;height:42px;
+  background:linear-gradient(180deg,#3a3a3a,#1a1a1a);
+  border-radius:4px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.4);
+}
+
+.vinyl-shadow{
+  position:absolute;bottom:-18px;left:50%;
+  width:160px;height:18px;border-radius:50%;
+  background:radial-gradient(ellipse,rgba(0,0,0,0.4) 0%,transparent 70%);
+  transform:translateX(-50%);
+  pointer-events:none;
+}
+
+/* 右侧轮播区 */
+.carousel-area{
+  position:relative;
+  flex:1;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-width:0;
+  opacity:0;animation:memFade 1.5s ease 1s forwards;
+}
+.memory-cards-stack{
+  position:relative;
+  width:100%;
+  height:100%;
+}
+
+/* 五张卡片：绝对定位，全部基于右区中心通过 transform 偏移 */
+.memory-card{
+  position:absolute;
+  top:50%;
+  left:50%;
+  border-radius:20px;
+  background:rgba(255,245,248,0.95);
+  box-shadow:0 8px 32px rgba(0,0,0,0.15);
+  border:2px solid #FFB7C5;
+  overflow:hidden;
+  opacity:0;
+  transform:translate(-50%,-50%) translateX(0) scale(0.5);
+  transition:opacity 0.7s cubic-bezier(0.4,0,0.2,1),transform 0.7s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events:none;
+  will-change:transform,opacity;
+}
+.memory-card img{width:100%;height:100%;object-fit:cover;display:block}
+.memory-card .caption{
+  position:absolute;bottom:0;left:0;width:100%;
+  padding:12px 10px 10px;
+  background:linear-gradient(180deg,transparent,rgba(45,27,46,0.75));
+  color:#fff;font-size:12px;text-align:center;
+  font-family:'Long Cang',cursive;letter-spacing:0.1em;
+  pointer-events:none;
+}
+
+/* 中间主卡 */
+.memory-card.active{
+  opacity:1;
+  transform:translate(-50%,-50%) translateX(0) scale(1);
+  width:300px;height:400px;
+  z-index:10;
+  pointer-events:auto;
+}
+.memory-card.prev1{
+  opacity:0.7;
+  transform:translate(-50%,-50%) translateX(-160px) scale(0.85);
+  width:240px;height:340px;
+  z-index:8;
+}
+.memory-card.next1{
+  opacity:0.7;
+  transform:translate(-50%,-50%) translateX(160px) scale(0.85);
+  width:240px;height:340px;
+  z-index:8;
+}
+.memory-card.prev2{
+  opacity:0.35;
+  transform:translate(-50%,-50%) translateX(-280px) scale(0.7);
+  width:200px;height:300px;
+  z-index:7;
+}
+.memory-card.next2{
+  opacity:0.35;
+  transform:translate(-50%,-50%) translateX(280px) scale(0.7);
+  width:200px;height:300px;
+  z-index:7;
+}
+
+.memory-left-zone,.memory-right-zone{
+  position:absolute;top:0;
+  width:50%;height:100%;
+  z-index:30;cursor:pointer;
+}
+.memory-left-zone{left:0}
+.memory-right-zone{right:0}
+
+/* 歌词带：贯穿全屏背景层，被唱片(z:20)覆盖 - 紧贴进度条上方约16px */
+.lyrics-display{
+  position:absolute;
+  bottom:52px;
+  left:0;width:100%;
+  text-align:center;
+  z-index:5;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  pointer-events:none;
+}
+.lyrics-text{
+  font-family:'Long Cang',cursive;font-size:1.6rem;
+  color:rgba(255,183,197,0.95);
+  padding:8px 28px;
+  display:inline-block;
+  letter-spacing:0.15em;
+  text-shadow:0 2px 8px rgba(45,27,46,0.6),0 0 16px rgba(255,182,193,0.5);
+  transition:opacity 0.5s ease,transform 0.5s ease;
+  max-width:90%;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.lyrics-text.fading{opacity:0;transform:translateY(-10px)}
+
+/* 底部进度条 */
+.progress-bar{
+  position:absolute;
+  bottom:0;left:0;width:100%;
+  padding:1rem 2rem 1.5rem;
+  z-index:30;
+}
+
+/* 播放器控制 - 流水/闪光加载效果 */
+.player-bar{display:none} /* 旧版隐藏 */
+.progress-track{
+  width:100%;height:8px;border-radius:4px;
+  background:rgba(255,255,255,0.08);
+  position:relative;cursor:pointer;
+  overflow:hidden;
+  transition:height 0.2s;
+}
+.progress-track:hover{height:10px}
+.progress-fill{
+  position:relative;
+  height:100%;border-radius:4px;
+  background:linear-gradient(90deg,#FFB7C5,#E8B4F0,#FFD4B5,#FFB7C5);
+  background-size:300% 100%;
+  width:0%;
+  transition:width 0.08s linear;
+  box-shadow:0 0 12px rgba(255,182,193,0.5);
+  animation:progressShimmer 2.5s linear infinite;
+  overflow:hidden;
+}
+@keyframes progressShimmer{
+  0%{background-position:0% 50%}
+  100%{background-position:300% 50%}
+}
+.progress-fill::after{
+  content:'';position:absolute;
+  top:0;left:-100%;width:60%;height:100%;
+  background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.55) 50%,transparent 100%);
+  animation:progressWave 1.5s linear infinite;
+}
+@keyframes progressWave{
+  0%{left:-60%}
+  100%{left:120%}
+}
+.progress-fill::before{
+  content:'';position:absolute;
+  top:50%;right:0;width:8px;height:8px;border-radius:50%;
+  background:#fff;
+  transform:translate(50%,-50%);
+  box-shadow:0 0 10px 4px rgba(255,255,255,0.7),0 0 20px 8px rgba(255,182,193,0.5);
+  animation:progressDot 1s ease-in-out infinite;
+}
+@keyframes progressDot{
+  0%,100%{transform:translate(50%,-50%) scale(1);opacity:1}
+  50%{transform:translate(50%,-50%) scale(1.4);opacity:0.85}
+}
+.progress-thumb{
+  position:absolute;top:50%;width:18px;height:18px;border-radius:50%;
+  background:radial-gradient(circle,#fff 0%,#FFB7C5 70%);
+  border:none;
+  transform:translate(-50%,-50%);
+  box-shadow:0 0 14px rgba(255,182,193,0.7),0 0 28px rgba(255,182,193,0.4);
+  left:0%;transition:left 0.08s linear,transform 0.2s;
+}
+.progress-thumb:hover{transform:translate(-50%,-50%) scale(1.3)}
+.time-info{
+  display:flex;justify-content:space-between;margin-top:0.7rem;
+  font-size:0.8rem;color:rgba(255,240,245,0.5);letter-spacing:0.1em;
+}
+/* 旧版 skip-btn 已被 S1 内嵌版本覆盖（顶部无边框透明） */

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>生日快乐 · Birthday</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600;700&amp;family=Quicksand:wght@300;400;500;600;700&amp;family=ZCOOL+KuaiLe&amp;family=Long+Cang&amp;family=Ma+Shan+Zheng&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/common.css">
+<link rel="stylesheet" href="css/intro.css">
+<link rel="stylesheet" href="css/memories.css">
+<link rel="stylesheet" href="css/interactive.css">
+<link rel="stylesheet" href="css/finale.css">
+</head>
+<body class="shell">
+
+<!-- 星空背景层 -->
+<canvas id="starfield"></canvas>
+<div class="atmosphere"></div>
+<div class="vignette"></div>
+
+<!-- 转场闪光 -->
+<div class="transition-flash" id="transFlash"></div>
+
+<!-- 背景音乐(file:// 相对路径加载,无需服务器) -->
+<audio id="bgAudio" src="music/特别的人/特别的人.MP3" preload="auto"></audio>
+
+<!-- ===== 场景1：开场 ===== -->
+<section id="intro" class="scene active">
+  <div class="intro-glow"></div>
+  <h1 class="intro-title">生日快乐</h1>
+  <p class="intro-subtitle">一份特别的礼物 送给特别的你</p>
+  <p class="intro-hint">轻触画面 开启音乐体验</p>
+</section>
+
+<!-- ===== 场景2：回忆 ===== -->
+<section id="memories" class="scene">
+  <div class="s1-main-container">
+    <div class="memories-header">
+      <button class="skip-btn" id="skipBtn">跳过 →</button>
+    </div>
+
+    <div class="s1-scene">
+      <div class="vinyl-area">
+        <div class="vinyl-arm">
+          <div class="vinyl-arm-pivot"></div>
+          <div class="vinyl-arm-body"></div>
+          <div class="vinyl-arm-head"></div>
+        </div>
+        <div class="vinyl-record">
+          <div class="vinyl-center-image">
+            <img id="diskCoverImg" src="" alt="光盘封面">
+          </div>
+        </div>
+        <div class="vinyl-shadow"></div>
+      </div>
+
+      <div class="carousel-area">
+        <div class="memory-cards-stack" id="memoryCarousel"></div>
+        <div class="memory-left-zone" id="memoryLeftZone"></div>
+        <div class="memory-right-zone" id="memoryRightZone"></div>
+      </div>
+    </div>
+
+    <div class="lyrics-display">
+      <p class="lyrics-text" id="lyricsText"></p>
+    </div>
+
+    <div class="progress-bar">
+      <div class="progress-track" id="progressTrack">
+        <div class="progress-fill" id="progressFill"></div>
+        <div class="progress-thumb" id="progressThumb"></div>
+      </div>
+      <div class="time-info">
+        <span id="currentTime">0:00</span>
+        <span id="totalTime">4:19</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 场景3：互动 ===== -->
+<section id="interactive" class="scene">
+  <div class="cake-area" id="cakeArea">
+    <div class="cake-plate"></div>
+    <div class="cake-layer cake-bottom">
+      <div class="cake-dots" id="dotsBottom"></div>
+    </div>
+    <div class="cake-layer cake-middle">
+      <div class="cake-dots" id="dotsMiddle"></div>
+    </div>
+    <div class="cake-layer cake-top">
+      <div class="cake-dots" id="dotsTop"></div>
+    </div>
+    <div class="candle-row" id="candleRow"></div>
+  </div>
+  <p class="interactive-hint" id="interactiveHint">点击蛋糕 闭上眼睛 许个愿望</p>
+  <p class="wish-text" id="wishText">愿望已许下 一定会实现</p>
+  <div class="balloon-layer" id="balloonLayer"></div>
+  <div class="confetti-layer" id="confettiLayer"></div>
+</section>
+
+<!-- ===== 场景4：心形汇聚 ===== -->
+<section id="finale" class="scene">
+  <div class="heart-stage" id="heartStage">
+    <div class="heart-glow"></div>
+  </div>
+  <div class="finale-message" id="finaleMessage">
+    <h2>生日快乐</h2>
+    <p>愿你永远被爱 永远快乐 永远闪耀</p>
+  </div>
+</section>
+
+<!-- 脚本(顺序:数据 → 歌词 → 音乐控制器 → 实例化 → 视觉 → 各场景 → 路由) -->
+<script src="js/images.js"></script>
+<script src="music/特别的人/特别的人.lyrics.js"></script>
+<script src="js/music-box.js"></script>
+<script>
+  // 全局音乐控制器实例,跨场景共享同一个 <audio>
+  const musicBox = new MusicBox(document.getElementById('bgAudio'));
+  window.musicBox = musicBox;
+</script>
+<script src="js/starfield.js"></script>
+<script src="js/float-particles.js"></script>
+<script src="js/intro.js"></script>
+<script src="js/memories.js"></script>
+<script src="js/interactive.js"></script>
+<script src="js/finale.js"></script>
+<script src="js/router.js"></script>
+</body>
+</html>

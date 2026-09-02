@@ -1,0 +1,1658 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>生日快乐 · Birthday</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600;700&amp;family=Quicksand:wght@300;400;500;600;700&amp;family=ZCOOL+KuaiLe&amp;family=Long+Cang&amp;family=Ma+Shan+Zheng&amp;display=swap" rel="stylesheet">
+<style>
+/* ==================== 基础与变量 ==================== */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --pink-100:#FFF0F5;--pink-200:#FFD1DC;--pink-300:#FFB6C1;--pink-400:#FF9BB3;--pink-500:#FF7FAA;
+  --lav-100:#F3EDFF;--lav-200:#E0D7FF;--lav-300:#C8A2C8;--lav-400:#B088C0;--lav-500:#9670A8;
+  --gold:#FFD700;--gold-soft:#FFE8A0;
+  --white-soft:#FFF8FB;--white-glass:rgba(255,248,251,0.08);
+  --text-glow:0 0 20px rgba(255,182,193,0.5);
+  --shadow-soft:0 8px 32px rgba(200,162,200,0.15);
+  --shadow-glow:0 0 40px rgba(255,182,193,0.25);
+}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'Quicksand','ZCOOL KuaiLe',sans-serif;cursor:default}
+body{
+  background:linear-gradient(160deg,#1a0a2e 0%,#2d1b4e 15%,#4a2b6e 35%,#6b3f7e 55%,#8b5a8c 75%,#c89bb8 100%);
+  color:var(--white-soft);
+  user-select:none;
+}
+
+/* ==================== 星空Canvas ==================== */
+#starfield{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none}
+
+/* 氛围渐变叠加 */
+.atmosphere{
+  position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none;
+  background:
+    radial-gradient(ellipse at 20% 30%,rgba(255,182,193,0.15) 0%,transparent 50%),
+    radial-gradient(ellipse at 80% 70%,rgba(200,162,200,0.12) 0%,transparent 50%),
+    radial-gradient(ellipse at 50% 100%,rgba(255,215,0,0.06) 0%,transparent 60%);
+}
+.vignette{
+  position:fixed;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none;
+  background:radial-gradient(ellipse at center,transparent 30%,rgba(26,10,46,0.4) 100%);
+}
+
+/* ==================== 场景系统 ==================== */
+.scene{
+  position:fixed;top:0;left:0;width:100%;height:100%;z-index:10;
+  opacity:0;pointer-events:none;
+  transition:opacity 1.8s cubic-bezier(0.4,0,0.2,1);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+.scene.active{opacity:1;pointer-events:auto}
+
+/* ==================== 场景1：开场 ==================== */
+#intro{text-align:center}
+.intro-glow{
+  width:300px;height:300px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,182,193,0.2) 0%,transparent 70%);
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  animation:glowPulse 4s ease-in-out infinite;
+}
+@keyframes glowPulse{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:0.5}50%{transform:translate(-50%,-50%) scale(1.3);opacity:0.8}}
+
+.intro-title{
+  font-family:'ZCOOL KuaiLe',sans-serif;
+  font-size:6.5rem;
+  background:linear-gradient(135deg,var(--pink-200),var(--gold-soft),var(--lav-200));
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  text-shadow:0 0 60px rgba(255,182,193,0.3);
+  letter-spacing:0.15em;
+  opacity:0;animation:introFade 2.5s ease 0.5s forwards;
+}
+.intro-subtitle{
+  font-family:'Long Cang',cursive;
+  font-size:1.8rem;color:var(--pink-200);
+  margin-top:1rem;letter-spacing:0.3em;
+  opacity:0;animation:introFade 2s ease 1.5s forwards;
+}
+.intro-hint{
+  margin-top:4rem;font-size:0.95rem;color:rgba(255,240,245,0.5);
+  letter-spacing:0.2em;
+  opacity:0;animation:introFade 2s ease 2.5s forwards, hintBlink 2s ease 4.5s infinite;
+}
+@keyframes introFade{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes hintBlink{0%,100%{opacity:0.4}50%{opacity:0.9}}
+
+/* ==================== 场景2：回忆（外层上下+内层左右） ==================== */
+#memories{
+  padding:0;
+  flex-direction:column;
+  align-items:stretch;
+  justify-content:flex-start;
+  gap:0;
+}
+
+/* 外层上下布局容器 */
+.s1-main-container{
+  position:relative;
+  width:100%;
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+
+/* 顶部标题区 - 移除后仅保留跳过按钮 */
+.memories-header{
+  position:relative;
+  width:100%;
+  height:0;
+  flex-shrink:0;
+  padding:0;
+  text-align:center;
+  z-index:6;
+}
+.memories-title{
+  font-family:'Ma Shan Zheng',cursive;font-size:2rem;
+  color:var(--pink-200);text-shadow:var(--text-glow);letter-spacing:0.2em;
+  opacity:0;animation:memFade 1.5s ease 0.5s forwards;
+  margin:0;line-height:2.4rem;
+}
+.skip-btn{
+  position:absolute;top:1rem;right:1.5rem;
+  padding:0.4rem 1.2rem;border-radius:25px;
+  background:transparent;
+  border:none;
+  color:var(--pink-100);font-size:0.85rem;cursor:pointer;
+  letter-spacing:0.1em;transition:all 0.3s;
+  opacity:0;animation:memFade 1.5s ease 1s forwards;
+}
+.skip-btn:hover{color:#fff;text-shadow:0 0 12px rgba(255,182,193,0.6)}
+@keyframes memFade{from{opacity:0;transform:translateY(-15px)}to{opacity:0.85;transform:translateY(0)}}
+
+/* 主场景：左右布局 */
+.s1-scene{
+  flex:1;
+  position:relative;
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  justify-content:flex-start;
+  padding:0 2rem;
+  min-height:0;
+}
+
+/* 左侧黑胶唱片区：垂直居中 */
+.vinyl-area{
+  position:relative;
+  z-index:20;
+  flex:0 0 auto;
+  width:30%;
+  max-width:280px;
+  min-width:200px;
+  align-self:center;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  opacity:0;animation:memFade 1.5s ease 0.8s forwards;
+}
+
+.vinyl-record{
+  position:relative;
+  width:200px;
+  height:200px;
+  border-radius:50%;
+  background:radial-gradient(circle,#1a1a1a 0%,#0a0a0a 70%,#000 100%);
+  box-shadow:0 0 40px rgba(255,182,193,0.25),0 0 20px rgba(0,0,0,0.6);
+  animation:diskRotate 4s linear infinite;
+  flex-shrink:0;
+}
+@keyframes diskRotate{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+
+.vinyl-record::before{
+  content:'';position:absolute;top:0;left:0;right:0;bottom:0;border-radius:50%;
+  background:
+    repeating-radial-gradient(circle at center,transparent 0,transparent 6px,rgba(255,255,255,0.04) 6px,rgba(255,255,255,0.04) 7px);
+}
+.vinyl-record::after{
+  content:'';position:absolute;top:50%;left:50%;
+  width:110px;height:110px;border-radius:50%;
+  background:radial-gradient(circle,#000 0%,#000 50%,transparent 51%);
+  transform:translate(-50%,-50%);
+  box-shadow:0 0 0 1px rgba(255,182,193,0.1);
+}
+
+.vinyl-center-image{
+  position:absolute;top:50%;left:50%;
+  width:60%;height:60%;
+  border-radius:50%;
+  transform:translate(-50%,-50%);
+  overflow:hidden;
+  box-shadow:0 0 0 2px rgba(255,182,193,0.4),0 4px 20px rgba(0,0,0,0.5);
+  z-index:2;
+}
+.vinyl-center-image img{
+  width:100%;height:100%;object-fit:cover;display:block;
+  border-radius:50%;
+  transition:opacity 0.5s ease-in-out,transform 0.5s ease-in-out;
+}
+.vinyl-center-image::after{
+  content:'';position:absolute;top:50%;left:50%;
+  width:12px;height:12px;border-radius:50%;
+  background:radial-gradient(circle,#222 0%,#000 100%);
+  transform:translate(-50%,-50%);
+  box-shadow:0 0 0 1px rgba(255,255,255,0.1);
+  z-index:3;
+}
+
+.vinyl-arm{
+  position:absolute;width:120px;height:120px;
+  top:0;right:-10px;
+  transform-origin:30px 30px;
+  z-index:21;pointer-events:none;
+  opacity:0;animation:memFade 1.5s ease 1.2s forwards;
+}
+.vinyl-arm-body{
+  position:absolute;width:7px;height:120px;
+  background:linear-gradient(180deg,#d4d4d4,#8a8a8a 50%,#5a5a5a);
+  border-radius:4px;
+  top:30px;left:30px;
+  transform-origin:50% 0;
+  box-shadow:0 2px 8px rgba(0,0,0,0.3);
+}
+.vinyl-arm-pivot{
+  position:absolute;top:18px;left:18px;
+  width:22px;height:22px;border-radius:50%;
+  background:radial-gradient(circle,#aaa 0%,#666 60%,#444 100%);
+  box-shadow:0 2px 6px rgba(0,0,0,0.4);
+}
+.vinyl-arm-head{
+  position:absolute;bottom:0;left:18px;
+  width:28px;height:42px;
+  background:linear-gradient(180deg,#3a3a3a,#1a1a1a);
+  border-radius:4px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.4);
+}
+
+.vinyl-shadow{
+  position:absolute;bottom:-18px;left:50%;
+  width:160px;height:18px;border-radius:50%;
+  background:radial-gradient(ellipse,rgba(0,0,0,0.4) 0%,transparent 70%);
+  transform:translateX(-50%);
+  pointer-events:none;
+}
+
+/* 右侧轮播区 */
+.carousel-area{
+  position:relative;
+  flex:1;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-width:0;
+  opacity:0;animation:memFade 1.5s ease 1s forwards;
+}
+.memory-cards-stack{
+  position:relative;
+  width:100%;
+  height:100%;
+}
+
+/* 五张卡片：绝对定位，全部基于右区中心通过 transform 偏移 */
+.memory-card{
+  position:absolute;
+  top:50%;
+  left:50%;
+  border-radius:20px;
+  background:rgba(255,245,248,0.95);
+  box-shadow:0 8px 32px rgba(0,0,0,0.15);
+  border:2px solid #FFB7C5;
+  overflow:hidden;
+  opacity:0;
+  transform:translate(-50%,-50%) translateX(0) scale(0.5);
+  transition:opacity 0.7s cubic-bezier(0.4,0,0.2,1),transform 0.7s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events:none;
+  will-change:transform,opacity;
+}
+.memory-card img{width:100%;height:100%;object-fit:cover;display:block}
+.memory-card .caption{
+  position:absolute;bottom:0;left:0;width:100%;
+  padding:12px 10px 10px;
+  background:linear-gradient(180deg,transparent,rgba(45,27,46,0.75));
+  color:#fff;font-size:12px;text-align:center;
+  font-family:'Long Cang',cursive;letter-spacing:0.1em;
+  pointer-events:none;
+}
+
+/* 中间主卡 */
+.memory-card.active{
+  opacity:1;
+  transform:translate(-50%,-50%) translateX(0) scale(1);
+  width:300px;height:400px;
+  z-index:10;
+  pointer-events:auto;
+}
+.memory-card.prev1{
+  opacity:0.7;
+  transform:translate(-50%,-50%) translateX(-160px) scale(0.85);
+  width:240px;height:340px;
+  z-index:8;
+}
+.memory-card.next1{
+  opacity:0.7;
+  transform:translate(-50%,-50%) translateX(160px) scale(0.85);
+  width:240px;height:340px;
+  z-index:8;
+}
+.memory-card.prev2{
+  opacity:0.35;
+  transform:translate(-50%,-50%) translateX(-280px) scale(0.7);
+  width:200px;height:300px;
+  z-index:7;
+}
+.memory-card.next2{
+  opacity:0.35;
+  transform:translate(-50%,-50%) translateX(280px) scale(0.7);
+  width:200px;height:300px;
+  z-index:7;
+}
+
+.memory-left-zone,.memory-right-zone{
+  position:absolute;top:0;
+  width:50%;height:100%;
+  z-index:30;cursor:pointer;
+}
+.memory-left-zone{left:0}
+.memory-right-zone{right:0}
+
+/* 歌词带：贯穿全屏背景层，被唱片(z:20)覆盖 - 紧贴进度条上方约16px */
+.lyrics-display{
+  position:absolute;
+  bottom:52px;
+  left:0;width:100%;
+  text-align:center;
+  z-index:5;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  pointer-events:none;
+}
+.lyrics-text{
+  font-family:'Long Cang',cursive;font-size:1.6rem;
+  color:rgba(255,183,197,0.95);
+  padding:8px 28px;
+  display:inline-block;
+  letter-spacing:0.15em;
+  text-shadow:0 2px 8px rgba(45,27,46,0.6),0 0 16px rgba(255,182,193,0.5);
+  transition:opacity 0.5s ease,transform 0.5s ease;
+  max-width:90%;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.lyrics-text.fading{opacity:0;transform:translateY(-10px)}
+
+/* 底部进度条 */
+.progress-bar{
+  position:absolute;
+  bottom:0;left:0;width:100%;
+  padding:1rem 2rem 1.5rem;
+  z-index:30;
+}
+
+/* 播放器控制 - 流水/闪光加载效果 */
+.player-bar{display:none} /* 旧版隐藏 */
+.progress-track{
+  width:100%;height:8px;border-radius:4px;
+  background:rgba(255,255,255,0.08);
+  position:relative;cursor:pointer;
+  overflow:hidden;
+  transition:height 0.2s;
+}
+.progress-track:hover{height:10px}
+.progress-fill{
+  position:relative;
+  height:100%;border-radius:4px;
+  background:linear-gradient(90deg,#FFB7C5,#E8B4F0,#FFD4B5,#FFB7C5);
+  background-size:300% 100%;
+  width:0%;
+  transition:width 0.08s linear;
+  box-shadow:0 0 12px rgba(255,182,193,0.5);
+  animation:progressShimmer 2.5s linear infinite;
+  overflow:hidden;
+}
+@keyframes progressShimmer{
+  0%{background-position:0% 50%}
+  100%{background-position:300% 50%}
+}
+.progress-fill::after{
+  content:'';position:absolute;
+  top:0;left:-100%;width:60%;height:100%;
+  background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.55) 50%,transparent 100%);
+  animation:progressWave 1.5s linear infinite;
+}
+@keyframes progressWave{
+  0%{left:-60%}
+  100%{left:120%}
+}
+.progress-fill::before{
+  content:'';position:absolute;
+  top:50%;right:0;width:8px;height:8px;border-radius:50%;
+  background:#fff;
+  transform:translate(50%,-50%);
+  box-shadow:0 0 10px 4px rgba(255,255,255,0.7),0 0 20px 8px rgba(255,182,193,0.5);
+  animation:progressDot 1s ease-in-out infinite;
+}
+@keyframes progressDot{
+  0%,100%{transform:translate(50%,-50%) scale(1);opacity:1}
+  50%{transform:translate(50%,-50%) scale(1.4);opacity:0.85}
+}
+.progress-thumb{
+  position:absolute;top:50%;width:18px;height:18px;border-radius:50%;
+  background:radial-gradient(circle,#fff 0%,#FFB7C5 70%);
+  border:none;
+  transform:translate(-50%,-50%);
+  box-shadow:0 0 14px rgba(255,182,193,0.7),0 0 28px rgba(255,182,193,0.4);
+  left:0%;transition:left 0.08s linear,transform 0.2s;
+}
+.progress-thumb:hover{transform:translate(-50%,-50%) scale(1.3)}
+.time-info{
+  display:flex;justify-content:space-between;margin-top:0.7rem;
+  font-size:0.8rem;color:rgba(255,240,245,0.5);letter-spacing:0.1em;
+}
+/* 旧版 skip-btn 已被 S1 内嵌版本覆盖（顶部无边框透明） */
+
+/* ==================== 场景3：互动 ==================== */
+#interactive{text-align:center}
+.cake-area{
+  position:relative;width:220px;height:300px;margin:0 auto;
+  cursor:pointer;
+  animation:cakeAppear 1.5s ease forwards;
+}
+@keyframes cakeAppear{from{opacity:0;transform:scale(0.5)}to{opacity:1;transform:scale(1)}}
+
+.cake-plate{
+  position:absolute;bottom:0;left:-15px;width:250px;height:22px;
+  background:linear-gradient(180deg,#f5e6f0,#d4b8d8);
+  border-radius:50%;box-shadow:0 8px 20px rgba(0,0,0,0.2);
+}
+.cake-plate::after{
+  content:'';position:absolute;top:2px;left:5px;width:240px;height:8px;
+  background:linear-gradient(180deg,rgba(255,255,255,0.4),transparent);
+  border-radius:50%;
+}
+
+.cake-layer{position:absolute;left:50%;transform:translateX(-50%);border-radius:8px 8px 4px 4px}
+.cake-bottom{bottom:18px;width:210px;height:85px;
+  background:linear-gradient(180deg,#ffc0cb 0%,#ff9bb3 60%,#e8849c 100%);
+}
+.cake-bottom::before{
+  content:'';position:absolute;top:-4px;left:0;width:100%;height:12px;
+  background:radial-gradient(ellipse 15px 8px at 20% 50%,#fff5f8 0%,transparent 0%),
+             radial-gradient(ellipse 15px 8px at 50% 50%,#fff5f8 0%,transparent 0%),
+             radial-gradient(ellipse 15px 8px at 80% 50%,#fff5f8 0%,transparent 0%);
+}
+.cake-bottom::after{
+  content:'';position:absolute;top:10px;left:0;width:100%;height:100%;
+  background:repeating-linear-gradient(90deg,transparent 0,transparent 20px,rgba(255,255,255,0.1) 20px,rgba(255,255,255,0.1) 40px);
+}
+
+.cake-middle{bottom:100px;width:170px;height:70px;
+  background:linear-gradient(180deg,#d8b0e8 0%,#c8a2c8 60%,#b88cb0 100%);
+}
+
+.cake-top{bottom:165px;width:130px;height:55px;
+  background:linear-gradient(180deg,#ffd1dc 0%,#ffb6c1 60%,#f596aa 100%);
+}
+
+/* 装饰奶油点 */
+.cake-dots{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+.cake-dot{position:absolute;width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.6)}
+
+/* 蜡烛 */
+.candle-row{position:absolute;bottom:215px;left:50%;transform:translateX(-50%);display:flex;gap:20px}
+.candle{position:relative;width:7px;height:35px;border-radius:2px;
+  background:linear-gradient(180deg,#fff5f8 0%,#ffd1dc 50%,#ffb6c1 100%);
+}
+.candle::before{content:'';position:absolute;top:-2px;left:50%;transform:translateX(-50%);width:2px;height:4px;background:#8b6914}
+.flame{
+  position:absolute;top:-18px;left:50%;transform:translateX(-50%);
+  width:12px;height:20px;
+  background:radial-gradient(ellipse at 50% 80%,#fff5d0 0%,#ffcc00 30%,#ff8800 60%,transparent 80%);
+  border-radius:50% 50% 50% 50%/60% 60% 40% 40%;
+  box-shadow:0 0 15px #ff9500,0 0 30px rgba(255,140,0,0.5);
+  animation:flicker 0.15s infinite alternate;
+}
+@keyframes flicker{
+  0%{transform:translateX(-50%) scale(1,1) rotate(-2deg)}
+  100%{transform:translateX(-50%) scale(1.08,1.12) rotate(2deg)}
+}
+.flame.out{animation:blowOut 0.6s forwards}
+@keyframes blowOut{
+  0%{opacity:1;transform:translateX(-50%) scale(1)}
+  30%{opacity:0.7;transform:translateX(-50%) scale(0.6,0.3) translateY(15px)}
+  100%{opacity:0;transform:translateX(-50%) scale(0.2,0.1) translateY(40px)}
+}
+
+/* 烟雾 */
+.smoke{position:absolute;top:-15px;left:50%;transform:translateX(-50%);
+  width:8px;height:8px;border-radius:50%;background:rgba(200,200,200,0.3);
+  opacity:0;
+}
+.smoke.active{animation:smokeRise 2s ease-out forwards}
+@keyframes smokeRise{
+  0%{opacity:0.4;transform:translateX(-50%) translateY(0) scale(0.5)}
+  100%{opacity:0;transform:translateX(-50%) translateY(-60px) scale(2)}
+}
+
+.interactive-hint{
+  margin-top:2rem;font-family:'Long Cang',cursive;font-size:1.6rem;
+  color:var(--pink-100);text-shadow:var(--text-glow);letter-spacing:0.15em;
+  animation:hintFloat 3s ease-in-out infinite;
+}
+@keyframes hintFloat{0%,100%{transform:translateY(0);opacity:0.7}50%{transform:translateY(-5px);opacity:1}}
+
+.wish-text{
+  position:absolute;top:35%;left:50%;transform:translate(-50%,-50%);
+  font-family:'Ma Shan Zheng',cursive;font-size:2rem;
+  color:var(--gold-soft);text-shadow:0 0 30px rgba(255,215,0,0.4);
+  opacity:0;pointer-events:none;letter-spacing:0.2em;
+}
+.wish-text.show{animation:wishFloat 3.5s ease-out forwards}
+@keyframes wishFloat{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(0.5)}
+  20%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  80%{opacity:1;transform:translate(-50%,-80%) scale(1)}
+  100%{opacity:0;transform:translate(-50%,-120%) scale(1.1)}
+}
+
+/* 气球 */
+.balloon-layer{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:15;overflow:hidden}
+.balloon{
+  position:absolute;bottom:-80px;width:40px;height:50px;
+  border-radius:50% 50% 50% 50%/55% 55% 45% 45%;
+  opacity:0;
+}
+.balloon::after{
+  content:'';position:absolute;bottom:-3px;left:50%;transform:translateX(-50%);
+  width:2px;height:8px;background:rgba(255,255,255,0.3);
+}
+.balloon::before{
+  content:'';position:absolute;bottom:-60px;left:50%;width:1px;height:60px;
+  background:linear-gradient(180deg,rgba(255,255,255,0.15),transparent);
+}
+.balloon.fly{animation:balloonFly var(--dur,4s) ease-out forwards}
+@keyframes balloonFly{
+  0%{bottom:-80px;opacity:0}
+  10%{opacity:0.9}
+  100%{bottom:110%;opacity:0.7;transform:translateX(var(--drift,0))}
+}
+
+/* 彩带 */
+.confetti-layer{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:16;overflow:hidden}
+.confetti-piece{
+  position:absolute;top:-20px;width:10px;height:16px;
+  opacity:0;
+}
+.confetti-piece.fall{animation:confettiFall var(--dur,3s) linear forwards}
+@keyframes confettiFall{
+  0%{top:-20px;opacity:1;transform:rotate(0deg) rotateY(0deg)}
+  100%{top:105%;opacity:0.5;transform:rotate(720deg) rotateY(360deg)}
+}
+
+/* ==================== 场景4：心形汇聚 ==================== */
+#finale{text-align:center}
+.heart-stage{
+  position:relative;width:720px;height:560px;
+  display:flex;align-items:center;justify-content:center;
+}
+.heart-photo{
+  position:absolute;width:72px;height:100px;border-radius:10px;overflow:hidden;
+  border:2px solid rgba(255,255,255,0.3);
+  box-shadow:0 4px 20px rgba(255,182,193,0.2);
+  transition:transform 1.5s cubic-bezier(0.34,1.56,0.64,1),opacity 1s ease;
+  opacity:0;
+}
+.heart-photo img{width:100%;height:100%;object-fit:cover;display:block}
+
+.heart-glow{
+  position:absolute;width:400px;height:380px;
+  background:radial-gradient(circle,rgba(255,182,193,0.15) 0%,transparent 60%);
+  border-radius:50%;
+  animation:heartGlow 3s ease-in-out infinite;
+}
+@keyframes heartGlow{0%,100%{transform:scale(1);opacity:0.5}50%{transform:scale(1.15);opacity:0.8}}
+
+.finale-message{
+  position:absolute;bottom:4rem;left:50%;transform:translateX(-50%);
+  text-align:center;z-index:5;opacity:0;
+}
+.finale-message.show{animation:finaleFade 3s ease forwards}
+@keyframes finaleFade{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.finale-message h2{
+  font-family:'ZCOOL KuaiLe',sans-serif;font-size:3.5rem;
+  background:linear-gradient(135deg,var(--pink-200),var(--gold-soft),var(--lav-200));
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  letter-spacing:0.2em;
+}
+.finale-message p{
+  font-family:'Long Cang',cursive;font-size:1.6rem;color:var(--pink-100);
+  margin-top:0.8rem;letter-spacing:0.2em;text-shadow:var(--text-glow);
+}
+
+/* 转场闪光 */
+.transition-flash{
+  position:fixed;top:0;left:0;width:100%;height:100%;z-index:50;
+  pointer-events:none;opacity:0;
+  background:radial-gradient(circle at center,rgba(255,240,245,0.4) 0%,transparent 60%);
+}
+.transition-flash.flash{animation:flashBurst 1.5s ease-out}
+@keyframes flashBurst{0%{opacity:0}20%{opacity:1}100%{opacity:0}}
+
+/* 漂浮粒子 */
+.float-particle{
+  position:fixed;border-radius:50%;pointer-events:none;z-index:3;
+  background:rgba(255,240,245,0.4);
+  animation:floatUp linear infinite;
+}
+@keyframes floatUp{
+  0%{transform:translateY(0) translateX(0);opacity:0}
+  10%{opacity:0.6}
+  90%{opacity:0.4}
+  100%{transform:translateY(-100vh) translateX(var(--drift,20px));opacity:0}
+}
+
+</style>
+</head>
+<body>
+
+<canvas id="starfield" width="882" height="648"></canvas>
+<div class="atmosphere"></div>
+<div class="vignette"></div>
+<div class="transition-flash flash" id="transFlash"></div>
+
+<!-- 场景1：开场 -->
+<section id="intro" class="scene">
+  <div class="intro-glow"></div>
+  <h1 class="intro-title">生日快乐</h1>
+  <p class="intro-subtitle">一份特别的礼物 送给特别的你</p>
+  <p class="intro-hint">轻触画面 开启音乐体验</p>
+</section>
+
+<!-- 场景2：回忆（左侧黑胶唱片 + 右侧单卡轮播） -->
+<!-- 场景2：回忆（外层上下+内层左右） -->
+<section id="memories" class="scene active">
+  <div class="s1-main-container">
+    <!-- 跳过按钮（标题已移除） -->
+    <div class="memories-header">
+      <button class="skip-btn" id="skipBtn">跳过 →</button>
+    </div>
+
+    <!-- 主场景区：左右布局 -->
+    <div class="s1-scene">
+      <!-- 左侧：黑胶唱片区（垂直居中） -->
+      <div class="vinyl-area">
+        <div class="vinyl-arm">
+          <div class="vinyl-arm-pivot"></div>
+          <div class="vinyl-arm-body"></div>
+          <div class="vinyl-arm-head"></div>
+        </div>
+        <div class="vinyl-record" style="width: 266.583px; height: 268.806px; transform: matrix(-0.902749, -0.430167, 0.430167, -0.902749, 44.8507, -47.598);">
+          <div class="vinyl-center-image">
+            <img id="diskCoverImg" src="" alt="光盘封面">
+          </div>
+        </div>
+        <div class="vinyl-shadow"></div>
+      </div>
+
+      <!-- 右侧：5张卡片轮播区 -->
+      <div class="carousel-area">
+        <div class="memory-cards-stack" id="memoryCarousel"><div class="memory-card" data-index="0"><img src="https://picsum.photos/seed/memory0/600/800?blur=0" alt="回忆 1" loading="lazy">
+                      <div class="caption">樱花飘落的小径 · 初遇的春天</div></div><div class="memory-card" data-index="1"><img src="https://picsum.photos/seed/memory1/600/800?blur=0" alt="回忆 2" loading="lazy">
+                      <div class="caption">星空下的城堡 · 童话的开始</div></div><div class="memory-card" data-index="2"><img src="https://picsum.photos/seed/memory2/600/800?blur=0" alt="回忆 3" loading="lazy">
+                      <div class="caption">粉色云端的黄昏 · 温柔的午后</div></div><div class="memory-card" data-index="3"><img src="https://picsum.photos/seed/memory3/600/800?blur=0" alt="回忆 4" loading="lazy">
+                      <div class="caption">水晶八音盒 · 珍藏的秘密</div></div><div class="memory-card" data-index="4"><img src="https://picsum.photos/seed/memory4/600/800?blur=0" alt="回忆 5" loading="lazy">
+                      <div class="caption">彩虹下的花海 · 一起许过的愿</div></div><div class="memory-card" data-index="5"><img src="https://picsum.photos/seed/memory5/600/800?blur=0" alt="回忆 6" loading="lazy">
+                      <div class="caption">独角兽的森林 · 梦境的入口</div></div><div class="memory-card" data-index="6"><img src="https://picsum.photos/seed/memory6/600/800?blur=0" alt="回忆 7" loading="lazy">
+                      <div class="caption">天灯升起的夜 · 心愿的寄托</div></div><div class="memory-card" data-index="7"><img src="https://picsum.photos/seed/memory7/600/800?blur=0" alt="回忆 8" loading="lazy">
+                      <div class="caption">粉色单车的午后 · 青春的剪影</div></div><div class="memory-card" data-index="8"><img src="https://picsum.photos/seed/memory8/600/800?blur=0" alt="回忆 9" loading="lazy">
+                      <div class="caption">热气球升空 · 远方的召唤</div></div><div class="memory-card prev2" data-index="9"><img src="https://picsum.photos/seed/memory9/600/800?blur=0" alt="回忆 10" loading="lazy">
+                      <div class="caption">玫瑰园的光点 · 浪漫的约定</div></div><div class="memory-card prev1" data-index="10"><img src="https://picsum.photos/seed/memory10/600/800?blur=0" alt="回忆 11" loading="lazy">
+                      <div class="caption">月光下的荷塘 · 静谧的回忆</div></div><div class="memory-card active" data-index="11"><img src="https://picsum.photos/seed/memory11/600/800?blur=0" alt="回忆 12" loading="lazy">
+                      <div class="caption">生日蛋糕的烛光 · 今日的主角</div></div><div class="memory-card next1" data-index="12"><img src="https://picsum.photos/seed/memory12/600/800?blur=0" alt="回忆 13" loading="lazy">
+                      <div class="caption">雪夜的松林 · 一起走过的小路</div></div><div class="memory-card next2" data-index="13"><img src="https://picsum.photos/seed/memory13/600/800?blur=0" alt="回忆 14" loading="lazy">
+                      <div class="caption">云端茶会 · 童话里的一天</div></div><div class="memory-card" data-index="14"><img src="https://picsum.photos/seed/memory14/600/800?blur=0" alt="回忆 15" loading="lazy">
+                      <div class="caption">蝴蝶花径 · 春日的小确幸</div></div><div class="memory-card" data-index="15"><img src="https://picsum.photos/seed/memory15/600/800?blur=0" alt="回忆 16" loading="lazy">
+                      <div class="caption">极光下的水晶宫 · 童话梦境</div></div><div class="memory-card" data-index="16"><img src="https://picsum.photos/seed/memory16/600/800?blur=0" alt="回忆 17" loading="lazy">
+                      <div class="caption">旋转木马 · 童年与现在</div></div><div class="memory-card" data-index="17"><img src="https://picsum.photos/seed/memory17/600/800?blur=0" alt="回忆 18" loading="lazy">
+                      <div class="caption">水晶气球 · 漂浮的幻想</div></div><div class="memory-card" data-index="18"><img src="https://picsum.photos/seed/memory18/600/800?blur=0" alt="回忆 19" loading="lazy">
+                      <div class="caption">彩虹瀑布 · 倾泻的时光</div></div><div class="memory-card" data-index="19"><img src="https://picsum.photos/seed/memory19/600/800?blur=0" alt="回忆 20" loading="lazy">
+                      <div class="caption">魔法图书馆 · 翻开的章节</div></div><div class="memory-card" data-index="20"><img src="https://picsum.photos/seed/memory20/600/800?blur=0" alt="回忆 21" loading="lazy">
+                      <div class="caption">樱花湖面 · 倒影中的你我</div></div><div class="memory-card" data-index="21"><img src="https://picsum.photos/seed/memory21/600/800?blur=0" alt="回忆 22" loading="lazy">
+                      <div class="caption">蘑菇森林 · 童年的探险</div></div><div class="memory-card" data-index="22"><img src="https://picsum.photos/seed/memory22/600/800?blur=0" alt="回忆 23" loading="lazy">
+                      <div class="caption">星空绿洲 · 沙漠的奇迹</div></div><div class="memory-card" data-index="23"><img src="https://picsum.photos/seed/memory23/600/800?blur=0" alt="回忆 24" loading="lazy">
+                      <div class="caption">水晶孔雀 · 绽开的回忆</div></div><div class="memory-card" data-index="24"><img src="https://picsum.photos/seed/memory24/600/800?blur=0" alt="回忆 25" loading="lazy">
+                      <div class="caption">糖果王国 · 甜入心扉的一天</div></div><div class="memory-card" data-index="25"><img src="https://picsum.photos/seed/memory25/600/800?blur=0" alt="回忆 26" loading="lazy">
+                      <div class="caption">星光下的瀑布 · 梦幻银河</div></div><div class="memory-card" data-index="26"><img src="https://picsum.photos/seed/memory26/600/800?blur=0" alt="回忆 27" loading="lazy">
+                      <div class="caption">天灯节 · 一千个心愿升空</div></div><div class="memory-card" data-index="27"><img src="https://picsum.photos/seed/memory27/600/800?blur=0" alt="回忆 28" loading="lazy">
+                      <div class="caption">冰封玫瑰 · 晶莹的誓言</div></div><div class="memory-card" data-index="28"><img src="https://picsum.photos/seed/memory28/600/800?blur=0" alt="回忆 29" loading="lazy">
+                      <div class="caption">珊瑚礁的美人鱼 · 海底童话</div></div><div class="memory-card" data-index="29"><img src="https://picsum.photos/seed/memory29/600/800?blur=0" alt="回忆 30" loading="lazy">
+                      <div class="caption">夜空中漂浮的水母 · 发光的梦</div></div><div class="memory-card" data-index="30"><img src="https://picsum.photos/seed/memory30/600/800?blur=0" alt="回忆 31" loading="lazy">
+                      <div class="caption">九尾狐 · 樱花下的倩影</div></div><div class="memory-card" data-index="31"><img src="https://picsum.photos/seed/memory31/600/800?blur=0" alt="回忆 32" loading="lazy">
+                      <div class="caption">彩虹山的飞龙 · 守护者的低语</div></div><div class="memory-card" data-index="32"><img src="https://picsum.photos/seed/memory32/600/800?blur=0" alt="回忆 33" loading="lazy">
+                      <div class="caption">云端钟塔 · 时光的指针</div></div><div class="memory-card" data-index="33"><img src="https://picsum.photos/seed/memory33/600/800?blur=0" alt="回忆 34" loading="lazy">
+                      <div class="caption">水晶小提琴 · 流动的旋律</div></div><div class="memory-card" data-index="34"><img src="https://picsum.photos/seed/memory34/600/800?blur=0" alt="回忆 35" loading="lazy">
+                      <div class="caption">晨曦中的天鹅 · 静谧的优雅</div></div><div class="memory-card" data-index="35"><img src="https://picsum.photos/seed/memory35/600/800?blur=0" alt="回忆 36" loading="lazy">
+                      <div class="caption">粉焰凤凰 · 重生的希望</div></div><div class="memory-card" data-index="36"><img src="https://picsum.photos/seed/memory36/600/800?blur=0" alt="回忆 37" loading="lazy">
+                      <div class="caption">魔法猫头鹰 · 森林的智者</div></div><div class="memory-card" data-index="37"><img src="https://picsum.photos/seed/memory37/600/800?blur=0" alt="回忆 38" loading="lazy">
+                      <div class="caption">捕梦网 · 留住每一个好梦</div></div><div class="memory-card" data-index="38"><img src="https://picsum.photos/seed/memory38/600/800?blur=0" alt="回忆 39" loading="lazy">
+                      <div class="caption">星系漩涡 · 宇宙的呼吸</div></div><div class="memory-card" data-index="39"><img src="https://picsum.photos/seed/memory39/600/800?blur=0" alt="回忆 40" loading="lazy">
+                      <div class="caption">水晶仙翼 · 闪烁的光尘</div></div><div class="memory-card" data-index="40"><img src="https://picsum.photos/seed/memory40/600/800?blur=0" alt="回忆 41" loading="lazy">
+                      <div class="caption">月宫城堡 · 漂浮的仙境</div></div><div class="memory-card" data-index="41"><img src="https://picsum.photos/seed/memory41/600/800?blur=0" alt="回忆 42" loading="lazy">
+                      <div class="caption">拐杖糖森林 · 甜蜜的冬天</div></div><div class="memory-card" data-index="0"><img src="https://picsum.photos/seed/memory0/600/800?blur=0" alt="回忆 1" loading="lazy">
+                      <div class="caption">樱花飘落的小径 · 初遇的春天</div></div><div class="memory-card" data-index="1"><img src="https://picsum.photos/seed/memory1/600/800?blur=0" alt="回忆 2" loading="lazy">
+                      <div class="caption">星空下的城堡 · 童话的开始</div></div><div class="memory-card" data-index="2"><img src="https://picsum.photos/seed/memory2/600/800?blur=0" alt="回忆 3" loading="lazy">
+                      <div class="caption">粉色云端的黄昏 · 温柔的午后</div></div><div class="memory-card" data-index="3"><img src="https://picsum.photos/seed/memory3/600/800?blur=0" alt="回忆 4" loading="lazy">
+                      <div class="caption">水晶八音盒 · 珍藏的秘密</div></div><div class="memory-card" data-index="4"><img src="https://picsum.photos/seed/memory4/600/800?blur=0" alt="回忆 5" loading="lazy">
+                      <div class="caption">彩虹下的花海 · 一起许过的愿</div></div><div class="memory-card" data-index="5"><img src="https://picsum.photos/seed/memory5/600/800?blur=0" alt="回忆 6" loading="lazy">
+                      <div class="caption">独角兽的森林 · 梦境的入口</div></div><div class="memory-card" data-index="6"><img src="https://picsum.photos/seed/memory6/600/800?blur=0" alt="回忆 7" loading="lazy">
+                      <div class="caption">天灯升起的夜 · 心愿的寄托</div></div><div class="memory-card" data-index="7"><img src="https://picsum.photos/seed/memory7/600/800?blur=0" alt="回忆 8" loading="lazy">
+                      <div class="caption">粉色单车的午后 · 青春的剪影</div></div><div class="memory-card" data-index="8"><img src="https://picsum.photos/seed/memory8/600/800?blur=0" alt="回忆 9" loading="lazy">
+                      <div class="caption">热气球升空 · 远方的召唤</div></div><div class="memory-card" data-index="9"><img src="https://picsum.photos/seed/memory9/600/800?blur=0" alt="回忆 10" loading="lazy">
+                      <div class="caption">玫瑰园的光点 · 浪漫的约定</div></div><div class="memory-card" data-index="10"><img src="https://picsum.photos/seed/memory10/600/800?blur=0" alt="回忆 11" loading="lazy">
+                      <div class="caption">月光下的荷塘 · 静谧的回忆</div></div><div class="memory-card" data-index="11"><img src="https://picsum.photos/seed/memory11/600/800?blur=0" alt="回忆 12" loading="lazy">
+                      <div class="caption">生日蛋糕的烛光 · 今日的主角</div></div><div class="memory-card" data-index="12"><img src="https://picsum.photos/seed/memory12/600/800?blur=0" alt="回忆 13" loading="lazy">
+                      <div class="caption">雪夜的松林 · 一起走过的小路</div></div><div class="memory-card" data-index="13"><img src="https://picsum.photos/seed/memory13/600/800?blur=0" alt="回忆 14" loading="lazy">
+                      <div class="caption">云端茶会 · 童话里的一天</div></div><div class="memory-card" data-index="14"><img src="https://picsum.photos/seed/memory14/600/800?blur=0" alt="回忆 15" loading="lazy">
+                      <div class="caption">蝴蝶花径 · 春日的小确幸</div></div><div class="memory-card" data-index="15"><img src="https://picsum.photos/seed/memory15/600/800?blur=0" alt="回忆 16" loading="lazy">
+                      <div class="caption">极光下的水晶宫 · 童话梦境</div></div><div class="memory-card" data-index="16"><img src="https://picsum.photos/seed/memory16/600/800?blur=0" alt="回忆 17" loading="lazy">
+                      <div class="caption">旋转木马 · 童年与现在</div></div><div class="memory-card" data-index="17"><img src="https://picsum.photos/seed/memory17/600/800?blur=0" alt="回忆 18" loading="lazy">
+                      <div class="caption">水晶气球 · 漂浮的幻想</div></div><div class="memory-card" data-index="18"><img src="https://picsum.photos/seed/memory18/600/800?blur=0" alt="回忆 19" loading="lazy">
+                      <div class="caption">彩虹瀑布 · 倾泻的时光</div></div><div class="memory-card" data-index="19"><img src="https://picsum.photos/seed/memory19/600/800?blur=0" alt="回忆 20" loading="lazy">
+                      <div class="caption">魔法图书馆 · 翻开的章节</div></div><div class="memory-card" data-index="20"><img src="https://picsum.photos/seed/memory20/600/800?blur=0" alt="回忆 21" loading="lazy">
+                      <div class="caption">樱花湖面 · 倒影中的你我</div></div><div class="memory-card" data-index="21"><img src="https://picsum.photos/seed/memory21/600/800?blur=0" alt="回忆 22" loading="lazy">
+                      <div class="caption">蘑菇森林 · 童年的探险</div></div><div class="memory-card" data-index="22"><img src="https://picsum.photos/seed/memory22/600/800?blur=0" alt="回忆 23" loading="lazy">
+                      <div class="caption">星空绿洲 · 沙漠的奇迹</div></div><div class="memory-card" data-index="23"><img src="https://picsum.photos/seed/memory23/600/800?blur=0" alt="回忆 24" loading="lazy">
+                      <div class="caption">水晶孔雀 · 绽开的回忆</div></div><div class="memory-card" data-index="24"><img src="https://picsum.photos/seed/memory24/600/800?blur=0" alt="回忆 25" loading="lazy">
+                      <div class="caption">糖果王国 · 甜入心扉的一天</div></div><div class="memory-card" data-index="25"><img src="https://picsum.photos/seed/memory25/600/800?blur=0" alt="回忆 26" loading="lazy">
+                      <div class="caption">星光下的瀑布 · 梦幻银河</div></div><div class="memory-card" data-index="26"><img src="https://picsum.photos/seed/memory26/600/800?blur=0" alt="回忆 27" loading="lazy">
+                      <div class="caption">天灯节 · 一千个心愿升空</div></div><div class="memory-card" data-index="27"><img src="https://picsum.photos/seed/memory27/600/800?blur=0" alt="回忆 28" loading="lazy">
+                      <div class="caption">冰封玫瑰 · 晶莹的誓言</div></div><div class="memory-card" data-index="28"><img src="https://picsum.photos/seed/memory28/600/800?blur=0" alt="回忆 29" loading="lazy">
+                      <div class="caption">珊瑚礁的美人鱼 · 海底童话</div></div><div class="memory-card" data-index="29"><img src="https://picsum.photos/seed/memory29/600/800?blur=0" alt="回忆 30" loading="lazy">
+                      <div class="caption">夜空中漂浮的水母 · 发光的梦</div></div><div class="memory-card" data-index="30"><img src="https://picsum.photos/seed/memory30/600/800?blur=0" alt="回忆 31" loading="lazy">
+                      <div class="caption">九尾狐 · 樱花下的倩影</div></div><div class="memory-card" data-index="31"><img src="https://picsum.photos/seed/memory31/600/800?blur=0" alt="回忆 32" loading="lazy">
+                      <div class="caption">彩虹山的飞龙 · 守护者的低语</div></div><div class="memory-card" data-index="32"><img src="https://picsum.photos/seed/memory32/600/800?blur=0" alt="回忆 33" loading="lazy">
+                      <div class="caption">云端钟塔 · 时光的指针</div></div><div class="memory-card" data-index="33"><img src="https://picsum.photos/seed/memory33/600/800?blur=0" alt="回忆 34" loading="lazy">
+                      <div class="caption">水晶小提琴 · 流动的旋律</div></div><div class="memory-card" data-index="34"><img src="https://picsum.photos/seed/memory34/600/800?blur=0" alt="回忆 35" loading="lazy">
+                      <div class="caption">晨曦中的天鹅 · 静谧的优雅</div></div><div class="memory-card" data-index="35"><img src="https://picsum.photos/seed/memory35/600/800?blur=0" alt="回忆 36" loading="lazy">
+                      <div class="caption">粉焰凤凰 · 重生的希望</div></div><div class="memory-card" data-index="36"><img src="https://picsum.photos/seed/memory36/600/800?blur=0" alt="回忆 37" loading="lazy">
+                      <div class="caption">魔法猫头鹰 · 森林的智者</div></div><div class="memory-card" data-index="37"><img src="https://picsum.photos/seed/memory37/600/800?blur=0" alt="回忆 38" loading="lazy">
+                      <div class="caption">捕梦网 · 留住每一个好梦</div></div><div class="memory-card" data-index="38"><img src="https://picsum.photos/seed/memory38/600/800?blur=0" alt="回忆 39" loading="lazy">
+                      <div class="caption">星系漩涡 · 宇宙的呼吸</div></div><div class="memory-card" data-index="39"><img src="https://picsum.photos/seed/memory39/600/800?blur=0" alt="回忆 40" loading="lazy">
+                      <div class="caption">水晶仙翼 · 闪烁的光尘</div></div><div class="memory-card" data-index="40"><img src="https://picsum.photos/seed/memory40/600/800?blur=0" alt="回忆 41" loading="lazy">
+                      <div class="caption">月宫城堡 · 漂浮的仙境</div></div><div class="memory-card" data-index="41"><img src="https://picsum.photos/seed/memory41/600/800?blur=0" alt="回忆 42" loading="lazy">
+                      <div class="caption">拐杖糖森林 · 甜蜜的冬天</div></div></div>
+        <div class="memory-left-zone" id="memoryLeftZone"></div>
+        <div class="memory-right-zone" id="memoryRightZone"></div>
+      </div>
+    </div>
+
+    <!-- 歌词带：作为背景层，被唱片遮挡 -->
+    <div class="lyrics-display">
+      <p class="lyrics-text" id="lyricsText">你值得世间所有的美好 所有的温柔 所有的爱</p>
+    </div>
+
+    <!-- 底部进度条 -->
+    <div class="progress-bar">
+      <div class="progress-track" id="progressTrack">
+        <div class="progress-fill" id="progressFill" style="width: 83.2027%;"></div>
+        <div class="progress-thumb" id="progressThumb" style="left: 83.2027%;"></div>
+      </div>
+      <div class="time-info">
+        <span id="currentTime">3:35</span>
+        <span id="totalTime">4:19</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- 场景3：互动 -->
+<section id="interactive" class="scene">
+  <div class="cake-area" id="cakeArea">
+    <div class="cake-plate"></div>
+    <div class="cake-layer cake-bottom">
+      <div class="cake-dots" id="dotsBottom"><div class="cake-dot" style="left: 23.0791%; top: 28.5626%;"></div><div class="cake-dot" style="left: 90.0458%; top: 46.4597%;"></div><div class="cake-dot" style="left: 61.1249%; top: 82.2803%;"></div><div class="cake-dot" style="left: 88.1065%; top: 59.4195%;"></div><div class="cake-dot" style="left: 76.926%; top: 41.8593%;"></div><div class="cake-dot" style="left: 57.5262%; top: 53.3351%;"></div><div class="cake-dot" style="left: 32.9612%; top: 67.7759%;"></div><div class="cake-dot" style="left: 21.9979%; top: 19.5733%;"></div><div class="cake-dot" style="left: 89.664%; top: 36.1572%;"></div><div class="cake-dot" style="left: 62.4904%; top: 41.3151%;"></div><div class="cake-dot" style="left: 11.4889%; top: 10.4459%;"></div><div class="cake-dot" style="left: 64.1025%; top: 12.8325%;"></div><div class="cake-dot" style="left: 57.5841%; top: 34.9955%;"></div><div class="cake-dot" style="left: 27.7685%; top: 22.6297%;"></div><div class="cake-dot" style="left: 57.6334%; top: 80.9038%;"></div><div class="cake-dot" style="left: 85.6402%; top: 86.5391%;"></div><div class="cake-dot" style="left: 35.5132%; top: 61.5186%;"></div><div class="cake-dot" style="left: 18.193%; top: 56.1746%;"></div><div class="cake-dot" style="left: 12.0648%; top: 89.3511%;"></div><div class="cake-dot" style="left: 12.5376%; top: 30.155%;"></div><div class="cake-dot" style="left: 55.022%; top: 33.0873%;"></div><div class="cake-dot" style="left: 35.3831%; top: 57.0387%;"></div><div class="cake-dot" style="left: 37.7938%; top: 76.0211%;"></div><div class="cake-dot" style="left: 21.8272%; top: 44.6709%;"></div><div class="cake-dot" style="left: 83.8667%; top: 66.5935%;"></div><div class="cake-dot" style="left: 26.198%; top: 54.8944%;"></div><div class="cake-dot" style="left: 23.8815%; top: 10.6347%;"></div><div class="cake-dot" style="left: 75.0055%; top: 79.1399%;"></div><div class="cake-dot" style="left: 57.7081%; top: 79.5814%;"></div><div class="cake-dot" style="left: 83.705%; top: 26.1002%;"></div><div class="cake-dot" style="left: 20.7129%; top: 85.4199%;"></div><div class="cake-dot" style="left: 7.40906%; top: 32.0416%;"></div></div>
+    </div>
+    <div class="cake-layer cake-middle">
+      <div class="cake-dots" id="dotsMiddle"><div class="cake-dot" style="left: 37.6724%; top: 19.9408%;"></div><div class="cake-dot" style="left: 7.79048%; top: 53.5609%;"></div><div class="cake-dot" style="left: 31.5269%; top: 12.2356%;"></div><div class="cake-dot" style="left: 6.65208%; top: 17.3662%;"></div><div class="cake-dot" style="left: 80.2316%; top: 70.8624%;"></div><div class="cake-dot" style="left: 69.6657%; top: 18.6045%;"></div><div class="cake-dot" style="left: 45.351%; top: 49.5278%;"></div><div class="cake-dot" style="left: 35.8886%; top: 32.8134%;"></div><div class="cake-dot" style="left: 85.3377%; top: 58.0415%;"></div><div class="cake-dot" style="left: 53.6937%; top: 45.1661%;"></div><div class="cake-dot" style="left: 43.7426%; top: 84.8885%;"></div><div class="cake-dot" style="left: 85.9551%; top: 57.5368%;"></div><div class="cake-dot" style="left: 48.8265%; top: 23.7824%;"></div><div class="cake-dot" style="left: 22.557%; top: 79.7697%;"></div><div class="cake-dot" style="left: 56.5751%; top: 64.8694%;"></div><div class="cake-dot" style="left: 66.944%; top: 83.3306%;"></div><div class="cake-dot" style="left: 38.484%; top: 69.1159%;"></div><div class="cake-dot" style="left: 71.1222%; top: 33.7229%;"></div><div class="cake-dot" style="left: 64.6348%; top: 56.9222%;"></div><div class="cake-dot" style="left: 82.8583%; top: 83.493%;"></div><div class="cake-dot" style="left: 13.72%; top: 22.3227%;"></div><div class="cake-dot" style="left: 60.8857%; top: 17.7464%;"></div><div class="cake-dot" style="left: 37.81%; top: 75.6891%;"></div><div class="cake-dot" style="left: 61.1545%; top: 43.5424%;"></div></div>
+    </div>
+    <div class="cake-layer cake-top">
+      <div class="cake-dots" id="dotsTop"><div class="cake-dot" style="left: 38.1817%; top: 46.5934%;"></div><div class="cake-dot" style="left: 52.729%; top: 75.9612%;"></div><div class="cake-dot" style="left: 80.2233%; top: 55.4319%;"></div><div class="cake-dot" style="left: 84.865%; top: 89.1026%;"></div><div class="cake-dot" style="left: 84.5889%; top: 56.386%;"></div><div class="cake-dot" style="left: 24.429%; top: 54.4429%;"></div><div class="cake-dot" style="left: 40.9269%; top: 31.8281%;"></div><div class="cake-dot" style="left: 22.2447%; top: 87.6071%;"></div><div class="cake-dot" style="left: 30.9773%; top: 30.2592%;"></div><div class="cake-dot" style="left: 58.8524%; top: 24.7911%;"></div><div class="cake-dot" style="left: 85.0971%; top: 20.7585%;"></div><div class="cake-dot" style="left: 73.9901%; top: 31.4096%;"></div><div class="cake-dot" style="left: 8.87732%; top: 40.0155%;"></div><div class="cake-dot" style="left: 14.6048%; top: 51.3421%;"></div><div class="cake-dot" style="left: 46.0393%; top: 63.3322%;"></div><div class="cake-dot" style="left: 14.7774%; top: 47.58%;"></div><div class="cake-dot" style="left: 83.6877%; top: 81.2436%;"></div><div class="cake-dot" style="left: 79.8731%; top: 69.9212%;"></div><div class="cake-dot" style="left: 92.3327%; top: 11.9061%;"></div><div class="cake-dot" style="left: 94.5876%; top: 14.0129%;"></div></div>
+    </div>
+    <div class="candle-row" id="candleRow"><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div><div class="candle"><div class="flame"></div><div class="smoke"></div></div></div>
+  </div>
+  <p class="interactive-hint" id="interactiveHint">点击蛋糕 闭上眼睛 许个愿望</p>
+  <p class="wish-text" id="wishText">愿望已许下 一定会实现</p>
+  <div class="balloon-layer" id="balloonLayer"></div>
+  <div class="confetti-layer" id="confettiLayer"></div>
+</section>
+
+<!-- 场景4：心形汇聚 -->
+<section id="finale" class="scene">
+  <div class="heart-stage" id="heartStage">
+    <div class="heart-glow"></div>
+  <div class="heart-photo" id="heartPhoto0" style="transform: translate(calc(-50% - 19.7747px), calc(-50% + 207.604px)) scale(0.3) rotate(1.58967deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pink%20cherry%20blossom%20path%20with%20falling%20petals%2C%20pastel%2C%20bokeh&amp;image_size=portrait_4_3" alt="回忆 1"></div><div class="heart-photo" id="heartPhoto1" style="transform: translate(calc(-50% - 38.2215px), calc(-50% - 188.154px)) scale(0.3) rotate(-25.4305deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Fantasy%20castle%20under%20purple%20starry%20sky%2C%20dreamy%20pastel%20illustration%2C%20sparkles&amp;image_size=portrait_4_3" alt="回忆 2"></div><div class="heart-photo" id="heartPhoto2" style="transform: translate(calc(-50% + 28.3598px), calc(-50% + 101.404px)) scale(0.3) rotate(-8.97196deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pink%20fluffy%20clouds%20at%20golden%20sunset%2C%20dreamy%20atmosphere%2C%20pastel%20colors&amp;image_size=portrait_4_3" alt="回忆 3"></div><div class="heart-photo" id="heartPhoto3" style="transform: translate(calc(-50% + 281.808px), calc(-50% - 96.0637px)) scale(0.3) rotate(29.6381deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Open%20vintage%20crystal%20music%20box%20with%20magical%20light%2C%20pink%20purple%20fantasy&amp;image_size=portrait_4_3" alt="回忆 4"></div><div class="heart-photo" id="heartPhoto4" style="transform: translate(calc(-50% - 115.761px), calc(-50% + 212.896px)) scale(0.3) rotate(-20.3514deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Field%20of%20pink%20flowers%20under%20soft%20rainbow%2C%20dreamy%20pastel%20landscape&amp;image_size=portrait_4_3" alt="回忆 5"></div><div class="heart-photo" id="heartPhoto5" style="transform: translate(calc(-50% + 285.135px), calc(-50% - 235.802px)) scale(0.3) rotate(-2.31715deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=White%20unicorn%20in%20enchanted%20pastel%20forest%2C%20dreamy%20fantasy%20art%2C%20sparkles&amp;image_size=portrait_4_3" alt="回忆 6"></div><div class="heart-photo" id="heartPhoto6" style="transform: translate(calc(-50% + 223.907px), calc(-50% + 117.654px)) scale(0.3) rotate(22.9825deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Floating%20paper%20lanterns%20in%20purple%20pink%20night%20sky%2C%20dreamy%20bokeh&amp;image_size=portrait_4_3" alt="回忆 7"></div><div class="heart-photo" id="heartPhoto7" style="transform: translate(calc(-50% - 107.576px), calc(-50% - 47.6959px)) scale(0.3) rotate(9.95876deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Vintage%20pink%20bicycle%20with%20flower%20basket%2C%20dreamy%20pastel%20spring%20scene&amp;image_size=portrait_4_3" alt="回忆 8"></div><div class="heart-photo" id="heartPhoto8" style="transform: translate(calc(-50% + 116.605px), calc(-50% + 233.509px)) scale(0.3) rotate(-1.69883deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Hot%20air%20balloons%20over%20pastel%20mountain%20range%2C%20dreamy%20sunset&amp;image_size=portrait_4_3" alt="回忆 9"></div><div class="heart-photo" id="heartPhoto9" style="transform: translate(calc(-50% - 299.869px), calc(-50% + 191.061px)) scale(0.3) rotate(10.4434deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pink%20rose%20garden%20with%20fairy%20lights%2C%20dreamy%20soft%20focus%2C%20pastel&amp;image_size=portrait_4_3" alt="回忆 10"></div><div class="heart-photo" id="heartPhoto10" style="transform: translate(calc(-50% + 24.2621px), calc(-50% + 237.974px)) scale(0.3) rotate(6.11605deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Moonlit%20lake%20with%20pink%20lotus%20flowers%2C%20dreamy%20pastel%20night%20scene&amp;image_size=portrait_4_3" alt="回忆 11"></div><div class="heart-photo" id="heartPhoto11" style="transform: translate(calc(-50% - 8.68842px), calc(-50% + 202.939px)) scale(0.3) rotate(-17.1736deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Sparkling%20birthday%20cake%20with%20pink%20candles%2C%20dreamy%20pastel%20celebration&amp;image_size=portrait_4_3" alt="回忆 12"></div><div class="heart-photo" id="heartPhoto12" style="transform: translate(calc(-50% + 111.23px), calc(-50% + 120.744px)) scale(0.3) rotate(-10.1451deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Snowy%20pastel%20pine%20forest%20at%20twilight%20with%20magical%20lights%2C%20dreamy&amp;image_size=portrait_4_3" alt="回忆 13"></div><div class="heart-photo" id="heartPhoto13" style="transform: translate(calc(-50% + 30.7899px), calc(-50% + 35.447px)) scale(0.3) rotate(-15.3655deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Magical%20fairy%20tea%20party%20on%20pastel%20clouds%2C%20dreamy%20fantasy%2C%20sparkles&amp;image_size=portrait_4_3" alt="回忆 14"></div><div class="heart-photo" id="heartPhoto14" style="transform: translate(calc(-50% - 9.58923px), calc(-50% + 173.993px)) scale(0.3) rotate(-14.8348deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20butterfly%20garden%20with%20glowing%20flowers%2C%20dreamy%20soft%20focus&amp;image_size=portrait_4_3" alt="回忆 15"></div><div class="heart-photo" id="heartPhoto15" style="transform: translate(calc(-50% - 16.3118px), calc(-50% + 139.527px)) scale(0.3) rotate(-24.235deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Crystal%20palace%20under%20aurora%20borealis%2C%20dreamy%20pastel%20purple%20fantasy&amp;image_size=portrait_4_3" alt="回忆 16"></div><div class="heart-photo" id="heartPhoto16" style="transform: translate(calc(-50% - 188.315px), calc(-50% + 225.308px)) scale(0.3) rotate(1.01933deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pastel%20carousel%20with%20golden%20horses%2C%20magical%20bokeh%20lights&amp;image_size=portrait_4_3" alt="回忆 17"></div><div class="heart-photo" id="heartPhoto17" style="transform: translate(calc(-50% - 241.625px), calc(-50% - 247.956px)) scale(0.3) rotate(23.7604deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Floating%20crystal%20balloons%20in%20pink%20purple%20sky%2C%20dreamy%20soft%20focus&amp;image_size=portrait_4_3" alt="回忆 18"></div><div class="heart-photo" id="heartPhoto18" style="transform: translate(calc(-50% - 16.6877px), calc(-50% + 163.7px)) scale(0.3) rotate(22.9906deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20rainbow%20waterfall%20in%20enchanted%20valley%2C%20dreamy%20fantasy%20landscape&amp;image_size=portrait_4_3" alt="回忆 19"></div><div class="heart-photo" id="heartPhoto19" style="transform: translate(calc(-50% + 170.516px), calc(-50% - 232.698px)) scale(0.3) rotate(-5.69769deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Magical%20fairy%20library%20with%20floating%20books%2C%20dreamy%20pastel%20interior&amp;image_size=portrait_4_3" alt="回忆 20"></div><div class="heart-photo" id="heartPhoto20" style="transform: translate(calc(-50% - 265.407px), calc(-50% - 163.424px)) scale(0.3) rotate(-7.5606deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20sakura%20petals%20floating%20on%20dreamy%20lake%2C%20mirror%20reflection&amp;image_size=portrait_4_3" alt="回忆 21"></div><div class="heart-photo" id="heartPhoto21" style="transform: translate(calc(-50% - 52.1669px), calc(-50% + 74.1063px)) scale(0.3) rotate(-10.9603deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Enchanted%20pastel%20mushroom%20forest%2C%20dreamy%20fantasy%20world%2C%20bokeh%20lights&amp;image_size=portrait_4_3" alt="回忆 22"></div><div class="heart-photo" id="heartPhoto22" style="transform: translate(calc(-50% - 57.8991px), calc(-50% - 217.777px)) scale(0.3) rotate(-0.650868deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20starry%20desert%20with%20magical%20oasis%2C%20dreamy%20pink%20purple%20fantasy&amp;image_size=portrait_4_3" alt="回忆 23"></div><div class="heart-photo" id="heartPhoto23" style="transform: translate(calc(-50% - 238.868px), calc(-50% + 141.289px)) scale(0.3) rotate(0.807133deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Crystal%20peacock%20with%20pastel%20feathers%2C%20dreamy%20fantasy%20art%2C%20sparkles&amp;image_size=portrait_4_3" alt="回忆 24"></div><div class="heart-photo" id="heartPhoto24" style="transform: translate(calc(-50% - 153.945px), calc(-50% + 72.8979px)) scale(0.3) rotate(11.8341deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20candy%20kingdom%20with%20lollipop%20towers%2C%20dreamy%20fantasy%2C%20sparkles&amp;image_size=portrait_4_3" alt="回忆 25"></div><div class="heart-photo" id="heartPhoto25" style="transform: translate(calc(-50% + 73.8106px), calc(-50% + 229.258px)) scale(0.3) rotate(-5.886deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Magical%20pastel%20waterfall%20glowing%20under%20stars%2C%20dreamy%20night%20scene&amp;image_size=portrait_4_3" alt="回忆 26"></div><div class="heart-photo" id="heartPhoto26" style="transform: translate(calc(-50% + 98.7034px), calc(-50% - 186.027px)) scale(0.3) rotate(-5.28267deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pastel%20sky%20lantern%20festival%2C%20hundreds%20of%20floating%20lanterns&amp;image_size=portrait_4_3" alt="回忆 27"></div><div class="heart-photo" id="heartPhoto27" style="transform: translate(calc(-50% - 190.169px), calc(-50% + 95.8872px)) scale(0.3) rotate(-15.1027deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Crystal%20rose%20frozen%20in%20ice%2C%20dreamy%20pastel%20winter%20scene%2C%20bokeh&amp;image_size=portrait_4_3" alt="回忆 28"></div><div class="heart-photo" id="heartPhoto28" style="transform: translate(calc(-50% - 226.187px), calc(-50% + 136.52px)) scale(0.3) rotate(11.1171deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20mermaid%20on%20magical%20coral%20reef%2C%20dreamy%20ocean%20fantasy%2C%20sparkles&amp;image_size=portrait_4_3" alt="回忆 29"></div><div class="heart-photo" id="heartPhoto29" style="transform: translate(calc(-50% + 242.379px), calc(-50% - 138.699px)) scale(0.3) rotate(-11.1858deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Glowing%20pastel%20jellyfish%20floating%20in%20night%20sky%2C%20dreamy%20fantasy&amp;image_size=portrait_4_3" alt="回忆 30"></div><div class="heart-photo" id="heartPhoto30" style="transform: translate(calc(-50% - 200.742px), calc(-50% - 224.179px)) scale(0.3) rotate(-8.4781deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pastel%20fox%20with%20nine%20tails%2C%20cherry%20blossom%20petals%2C%20magical&amp;image_size=portrait_4_3" alt="回忆 31"></div><div class="heart-photo" id="heartPhoto31" style="transform: translate(calc(-50% - 265.456px), calc(-50% + 134.373px)) scale(0.3) rotate(29.8719deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20dragon%20flying%20over%20rainbow%20mountains%2C%20dreamy%20fantasy%20art&amp;image_size=portrait_4_3" alt="回忆 32"></div><div class="heart-photo" id="heartPhoto32" style="transform: translate(calc(-50% + 238.235px), calc(-50% + 67.9118px)) scale(0.3) rotate(-11.154deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pastel%20clock%20tower%20in%20cloud%20city%2C%20magical%20sunset%2C%20bokeh&amp;image_size=portrait_4_3" alt="回忆 33"></div><div class="heart-photo" id="heartPhoto33" style="transform: translate(calc(-50% - 217.623px), calc(-50% + 158.891px)) scale(0.3) rotate(-19.7286deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Crystal%20violin%20with%20glowing%20pastel%20notes%2C%20dreamy%20music%20fantasy&amp;image_size=portrait_4_3" alt="回忆 34"></div><div class="heart-photo" id="heartPhoto34" style="transform: translate(calc(-50% - 58.7907px), calc(-50% - 175.724px)) scale(0.3) rotate(-15.7436deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20swan%20on%20dreamy%20pink%20lake%20at%20sunrise%2C%20soft%20pastel%20bokeh&amp;image_size=portrait_4_3" alt="回忆 35"></div><div class="heart-photo" id="heartPhoto35" style="transform: translate(calc(-50% - 289.02px), calc(-50% - 82.1244px)) scale(0.3) rotate(22.9183deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pastel%20phoenix%20rising%20from%20pink%20flames%2C%20fantasy%20art&amp;image_size=portrait_4_3" alt="回忆 36"></div><div class="heart-photo" id="heartPhoto36" style="transform: translate(calc(-50% + 141.53px), calc(-50% - 92.035px)) scale(0.3) rotate(2.20691deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Magical%20pastel%20owl%20on%20glowing%20mushroom%2C%20dreamy%20night%20forest&amp;image_size=portrait_4_3" alt="回忆 37"></div><div class="heart-photo" id="heartPhoto37" style="transform: translate(calc(-50% - 267.256px), calc(-50% - 182.089px)) scale(0.3) rotate(-0.559106deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20dreamcatcher%20with%20pink%20feathers%2C%20dreamy%20soft%20focus&amp;image_size=portrait_4_3" alt="回忆 38"></div><div class="heart-photo" id="heartPhoto38" style="transform: translate(calc(-50% - 257.192px), calc(-50% - 218.733px)) scale(0.3) rotate(-18.3297deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pastel%20galaxy%20swirl%20with%20stars%20and%20nebula%2C%20magical&amp;image_size=portrait_4_3" alt="回忆 39"></div><div class="heart-photo" id="heartPhoto39" style="transform: translate(calc(-50% + 204.916px), calc(-50% - 27.9172px)) scale(0.3) rotate(-3.91816deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Crystal%20fairy%20wings%20with%20pastel%20light%2C%20dreamy%20fantasy%20portrait&amp;image_size=portrait_4_3" alt="回忆 40"></div><div class="heart-photo" id="heartPhoto40" style="transform: translate(calc(-50% - 204.831px), calc(-50% + 22.8852px)) scale(0.3) rotate(-17.8509deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20moon%20castle%20floating%20in%20clouds%2C%20dreamy%20fantasy%20night&amp;image_size=portrait_4_3" alt="回忆 41"></div><div class="heart-photo" id="heartPhoto41" style="transform: translate(calc(-50% - 151.531px), calc(-50% + 181.292px)) scale(0.3) rotate(15.246deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pastel%20candy%20cane%20forest%20with%20sparkles%2C%20magical%20winter&amp;image_size=portrait_4_3" alt="回忆 42"></div><div class="heart-photo" id="heartPhoto0" style="transform: translate(calc(-50% - 249.995px), calc(-50% + 76.1375px)) scale(0.3) rotate(5.66378deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pink%20cherry%20blossom%20path%20with%20falling%20petals%2C%20pastel%2C%20bokeh&amp;image_size=portrait_4_3" alt="回忆 1"></div><div class="heart-photo" id="heartPhoto1" style="transform: translate(calc(-50% - 135.473px), calc(-50% + 154.592px)) scale(0.3) rotate(11.8789deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Fantasy%20castle%20under%20purple%20starry%20sky%2C%20dreamy%20pastel%20illustration%2C%20sparkles&amp;image_size=portrait_4_3" alt="回忆 2"></div><div class="heart-photo" id="heartPhoto2" style="transform: translate(calc(-50% - 20.2043px), calc(-50% + 76.0392px)) scale(0.3) rotate(7.60763deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pink%20fluffy%20clouds%20at%20golden%20sunset%2C%20dreamy%20atmosphere%2C%20pastel%20colors&amp;image_size=portrait_4_3" alt="回忆 3"></div><div class="heart-photo" id="heartPhoto3" style="transform: translate(calc(-50% + 255.988px), calc(-50% + 79.676px)) scale(0.3) rotate(-18.3552deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Open%20vintage%20crystal%20music%20box%20with%20magical%20light%2C%20pink%20purple%20fantasy&amp;image_size=portrait_4_3" alt="回忆 4"></div><div class="heart-photo" id="heartPhoto4" style="transform: translate(calc(-50% + 10.3351px), calc(-50% + 41.8218px)) scale(0.3) rotate(5.01827deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Field%20of%20pink%20flowers%20under%20soft%20rainbow%2C%20dreamy%20pastel%20landscape&amp;image_size=portrait_4_3" alt="回忆 5"></div><div class="heart-photo" id="heartPhoto5" style="transform: translate(calc(-50% - 108.263px), calc(-50% - 160.741px)) scale(0.3) rotate(-1.35062deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=White%20unicorn%20in%20enchanted%20pastel%20forest%2C%20dreamy%20fantasy%20art%2C%20sparkles&amp;image_size=portrait_4_3" alt="回忆 6"></div><div class="heart-photo" id="heartPhoto6" style="transform: translate(calc(-50% - 186.624px), calc(-50% - 166.203px)) scale(0.3) rotate(-3.9394deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Floating%20paper%20lanterns%20in%20purple%20pink%20night%20sky%2C%20dreamy%20bokeh&amp;image_size=portrait_4_3" alt="回忆 7"></div><div class="heart-photo" id="heartPhoto7" style="transform: translate(calc(-50% + 221.475px), calc(-50% - 104.707px)) scale(0.3) rotate(21.6661deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Vintage%20pink%20bicycle%20with%20flower%20basket%2C%20dreamy%20pastel%20spring%20scene&amp;image_size=portrait_4_3" alt="回忆 8"></div><div class="heart-photo" id="heartPhoto8" style="transform: translate(calc(-50% - 90.803px), calc(-50% - 172.255px)) scale(0.3) rotate(-7.76318deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Hot%20air%20balloons%20over%20pastel%20mountain%20range%2C%20dreamy%20sunset&amp;image_size=portrait_4_3" alt="回忆 9"></div><div class="heart-photo" id="heartPhoto9" style="transform: translate(calc(-50% - 106.209px), calc(-50% + 211.187px)) scale(0.3) rotate(3.26644deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pink%20rose%20garden%20with%20fairy%20lights%2C%20dreamy%20soft%20focus%2C%20pastel&amp;image_size=portrait_4_3" alt="回忆 10"></div><div class="heart-photo" id="heartPhoto10" style="transform: translate(calc(-50% - 232.805px), calc(-50% - 161.557px)) scale(0.3) rotate(5.94241deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Moonlit%20lake%20with%20pink%20lotus%20flowers%2C%20dreamy%20pastel%20night%20scene&amp;image_size=portrait_4_3" alt="回忆 11"></div><div class="heart-photo" id="heartPhoto11" style="transform: translate(calc(-50% + 209.746px), calc(-50% + 81.1083px)) scale(0.3) rotate(-29.7709deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Sparkling%20birthday%20cake%20with%20pink%20candles%2C%20dreamy%20pastel%20celebration&amp;image_size=portrait_4_3" alt="回忆 12"></div><div class="heart-photo" id="heartPhoto12" style="transform: translate(calc(-50% + 58.8168px), calc(-50% + 91.7448px)) scale(0.3) rotate(-11.4049deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Snowy%20pastel%20pine%20forest%20at%20twilight%20with%20magical%20lights%2C%20dreamy&amp;image_size=portrait_4_3" alt="回忆 13"></div><div class="heart-photo" id="heartPhoto13" style="transform: translate(calc(-50% + 12.8517px), calc(-50% + 47.2101px)) scale(0.3) rotate(-12.6438deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Magical%20fairy%20tea%20party%20on%20pastel%20clouds%2C%20dreamy%20fantasy%2C%20sparkles&amp;image_size=portrait_4_3" alt="回忆 14"></div><div class="heart-photo" id="heartPhoto14" style="transform: translate(calc(-50% - 280.208px), calc(-50% + 42.6104px)) scale(0.3) rotate(19.3404deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20butterfly%20garden%20with%20glowing%20flowers%2C%20dreamy%20soft%20focus&amp;image_size=portrait_4_3" alt="回忆 15"></div><div class="heart-photo" id="heartPhoto15" style="transform: translate(calc(-50% - 38.3749px), calc(-50% - 199.653px)) scale(0.3) rotate(26.817deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Crystal%20palace%20under%20aurora%20borealis%2C%20dreamy%20pastel%20purple%20fantasy&amp;image_size=portrait_4_3" alt="回忆 16"></div><div class="heart-photo" id="heartPhoto16" style="transform: translate(calc(-50% + 188px), calc(-50% - 28.906px)) scale(0.3) rotate(-12.1969deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pastel%20carousel%20with%20golden%20horses%2C%20magical%20bokeh%20lights&amp;image_size=portrait_4_3" alt="回忆 17"></div><div class="heart-photo" id="heartPhoto17" style="transform: translate(calc(-50% + 138.414px), calc(-50% + 151.517px)) scale(0.3) rotate(6.10256deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Floating%20crystal%20balloons%20in%20pink%20purple%20sky%2C%20dreamy%20soft%20focus&amp;image_size=portrait_4_3" alt="回忆 18"></div><div class="heart-photo" id="heartPhoto18" style="transform: translate(calc(-50% - 256.639px), calc(-50% + 27.4983px)) scale(0.3) rotate(27.8848deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20rainbow%20waterfall%20in%20enchanted%20valley%2C%20dreamy%20fantasy%20landscape&amp;image_size=portrait_4_3" alt="回忆 19"></div><div class="heart-photo" id="heartPhoto19" style="transform: translate(calc(-50% - 168.606px), calc(-50% + 201.11px)) scale(0.3) rotate(-19.5755deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Magical%20fairy%20library%20with%20floating%20books%2C%20dreamy%20pastel%20interior&amp;image_size=portrait_4_3" alt="回忆 20"></div><div class="heart-photo" id="heartPhoto20" style="transform: translate(calc(-50% - 23.0934px), calc(-50% + 202.658px)) scale(0.3) rotate(-12.2984deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20sakura%20petals%20floating%20on%20dreamy%20lake%2C%20mirror%20reflection&amp;image_size=portrait_4_3" alt="回忆 21"></div><div class="heart-photo" id="heartPhoto21" style="transform: translate(calc(-50% - 162.089px), calc(-50% + 231.03px)) scale(0.3) rotate(4.60023deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Enchanted%20pastel%20mushroom%20forest%2C%20dreamy%20fantasy%20world%2C%20bokeh%20lights&amp;image_size=portrait_4_3" alt="回忆 22"></div><div class="heart-photo" id="heartPhoto22" style="transform: translate(calc(-50% + 274.951px), calc(-50% - 214.382px)) scale(0.3) rotate(-10.7941deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20starry%20desert%20with%20magical%20oasis%2C%20dreamy%20pink%20purple%20fantasy&amp;image_size=portrait_4_3" alt="回忆 23"></div><div class="heart-photo" id="heartPhoto23" style="transform: translate(calc(-50% - 270.149px), calc(-50% + 227.444px)) scale(0.3) rotate(27.7336deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Crystal%20peacock%20with%20pastel%20feathers%2C%20dreamy%20fantasy%20art%2C%20sparkles&amp;image_size=portrait_4_3" alt="回忆 24"></div><div class="heart-photo" id="heartPhoto24" style="transform: translate(calc(-50% + 40.1191px), calc(-50% - 165.859px)) scale(0.3) rotate(-25.0279deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20candy%20kingdom%20with%20lollipop%20towers%2C%20dreamy%20fantasy%2C%20sparkles&amp;image_size=portrait_4_3" alt="回忆 25"></div><div class="heart-photo" id="heartPhoto25" style="transform: translate(calc(-50% + 113.928px), calc(-50% - 228.941px)) scale(0.3) rotate(-3.61138deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Magical%20pastel%20waterfall%20glowing%20under%20stars%2C%20dreamy%20night%20scene&amp;image_size=portrait_4_3" alt="回忆 26"></div><div class="heart-photo" id="heartPhoto26" style="transform: translate(calc(-50% + 36.4536px), calc(-50% - 99.0541px)) scale(0.3) rotate(-21.6619deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pastel%20sky%20lantern%20festival%2C%20hundreds%20of%20floating%20lanterns&amp;image_size=portrait_4_3" alt="回忆 27"></div><div class="heart-photo" id="heartPhoto27" style="transform: translate(calc(-50% + 117.545px), calc(-50% - 142.68px)) scale(0.3) rotate(15.3427deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Crystal%20rose%20frozen%20in%20ice%2C%20dreamy%20pastel%20winter%20scene%2C%20bokeh&amp;image_size=portrait_4_3" alt="回忆 28"></div><div class="heart-photo" id="heartPhoto28" style="transform: translate(calc(-50% + 115.094px), calc(-50% - 213.812px)) scale(0.3) rotate(27.2317deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20mermaid%20on%20magical%20coral%20reef%2C%20dreamy%20ocean%20fantasy%2C%20sparkles&amp;image_size=portrait_4_3" alt="回忆 29"></div><div class="heart-photo" id="heartPhoto29" style="transform: translate(calc(-50% + 227.656px), calc(-50% + 188.73px)) scale(0.3) rotate(-1.73336deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Glowing%20pastel%20jellyfish%20floating%20in%20night%20sky%2C%20dreamy%20fantasy&amp;image_size=portrait_4_3" alt="回忆 30"></div><div class="heart-photo" id="heartPhoto30" style="transform: translate(calc(-50% - 296.604px), calc(-50% + 28.8693px)) scale(0.3) rotate(-1.02048deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pastel%20fox%20with%20nine%20tails%2C%20cherry%20blossom%20petals%2C%20magical&amp;image_size=portrait_4_3" alt="回忆 31"></div><div class="heart-photo" id="heartPhoto31" style="transform: translate(calc(-50% - 123.541px), calc(-50% + 225.948px)) scale(0.3) rotate(-0.46368deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20dragon%20flying%20over%20rainbow%20mountains%2C%20dreamy%20fantasy%20art&amp;image_size=portrait_4_3" alt="回忆 32"></div><div class="heart-photo" id="heartPhoto32" style="transform: translate(calc(-50% - 71.6728px), calc(-50% - 183.338px)) scale(0.3) rotate(-18.384deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pastel%20clock%20tower%20in%20cloud%20city%2C%20magical%20sunset%2C%20bokeh&amp;image_size=portrait_4_3" alt="回忆 33"></div><div class="heart-photo" id="heartPhoto33" style="transform: translate(calc(-50% + 150.673px), calc(-50% + 28.8824px)) scale(0.3) rotate(-2.30011deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Crystal%20violin%20with%20glowing%20pastel%20notes%2C%20dreamy%20music%20fantasy&amp;image_size=portrait_4_3" alt="回忆 34"></div><div class="heart-photo" id="heartPhoto34" style="transform: translate(calc(-50% + 8.20774px), calc(-50% + 234.333px)) scale(0.3) rotate(2.93585deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20swan%20on%20dreamy%20pink%20lake%20at%20sunrise%2C%20soft%20pastel%20bokeh&amp;image_size=portrait_4_3" alt="回忆 35"></div><div class="heart-photo" id="heartPhoto35" style="transform: translate(calc(-50% - 137.747px), calc(-50% + 209.665px)) scale(0.3) rotate(21.7348deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pastel%20phoenix%20rising%20from%20pink%20flames%2C%20fantasy%20art&amp;image_size=portrait_4_3" alt="回忆 36"></div><div class="heart-photo" id="heartPhoto36" style="transform: translate(calc(-50% - 78.3961px), calc(-50% + 150.664px)) scale(0.3) rotate(-16.5914deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Magical%20pastel%20owl%20on%20glowing%20mushroom%2C%20dreamy%20night%20forest&amp;image_size=portrait_4_3" alt="回忆 37"></div><div class="heart-photo" id="heartPhoto37" style="transform: translate(calc(-50% + 92.5008px), calc(-50% + 75.8147px)) scale(0.3) rotate(-14.8255deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20dreamcatcher%20with%20pink%20feathers%2C%20dreamy%20soft%20focus&amp;image_size=portrait_4_3" alt="回忆 38"></div><div class="heart-photo" id="heartPhoto38" style="transform: translate(calc(-50% + 29.7606px), calc(-50% - 189.468px)) scale(0.3) rotate(20.894deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pastel%20galaxy%20swirl%20with%20stars%20and%20nebula%2C%20magical&amp;image_size=portrait_4_3" alt="回忆 39"></div><div class="heart-photo" id="heartPhoto39" style="transform: translate(calc(-50% + 166.199px), calc(-50% - 184.037px)) scale(0.3) rotate(5.24554deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Crystal%20fairy%20wings%20with%20pastel%20light%2C%20dreamy%20fantasy%20portrait&amp;image_size=portrait_4_3" alt="回忆 40"></div><div class="heart-photo" id="heartPhoto40" style="transform: translate(calc(-50% - 106.858px), calc(-50% + 238.746px)) scale(0.3) rotate(-12.6928deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Pastel%20moon%20castle%20floating%20in%20clouds%2C%20dreamy%20fantasy%20night&amp;image_size=portrait_4_3" alt="回忆 41"></div><div class="heart-photo" id="heartPhoto41" style="transform: translate(calc(-50% - 162.459px), calc(-50% + 37.7708px)) scale(0.3) rotate(-24.339deg); opacity: 0;"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Dreamy%20pastel%20candy%20cane%20forest%20with%20sparkles%2C%20magical%20winter&amp;image_size=portrait_4_3" alt="回忆 42"></div><div class="heart-photo" id="heartPhoto0" style="transform: translate(calc(-50% + 46.5371px), calc(-50% + 80.1608px)) scale(0.3) rotate(2.31852deg); opacity: 0;"><img src="https://picsum.photos/seed/memory0/600/800?blur=0" alt="回忆 1"></div><div class="heart-photo" id="heartPhoto1" style="transform: translate(calc(-50% - 115.638px), calc(-50% + 184.571px)) scale(0.3) rotate(-18.7707deg); opacity: 0;"><img src="https://picsum.photos/seed/memory1/600/800?blur=0" alt="回忆 2"></div><div class="heart-photo" id="heartPhoto2" style="transform: translate(calc(-50% - 19.3742px), calc(-50% - 193.322px)) scale(0.3) rotate(-26.9172deg); opacity: 0;"><img src="https://picsum.photos/seed/memory2/600/800?blur=0" alt="回忆 3"></div><div class="heart-photo" id="heartPhoto3" style="transform: translate(calc(-50% - 153.707px), calc(-50% + 190.019px)) scale(0.3) rotate(17.0948deg); opacity: 0;"><img src="https://picsum.photos/seed/memory3/600/800?blur=0" alt="回忆 4"></div><div class="heart-photo" id="heartPhoto4" style="transform: translate(calc(-50% - 12.6858px), calc(-50% - 127.437px)) scale(0.3) rotate(-15.1963deg); opacity: 0;"><img src="https://picsum.photos/seed/memory4/600/800?blur=0" alt="回忆 5"></div><div class="heart-photo" id="heartPhoto5" style="transform: translate(calc(-50% - 257.195px), calc(-50% + 48.8376px)) scale(0.3) rotate(-23.1199deg); opacity: 0;"><img src="https://picsum.photos/seed/memory5/600/800?blur=0" alt="回忆 6"></div><div class="heart-photo" id="heartPhoto6" style="transform: translate(calc(-50% + 133.431px), calc(-50% + 155.466px)) scale(0.3) rotate(-11.2243deg); opacity: 0;"><img src="https://picsum.photos/seed/memory6/600/800?blur=0" alt="回忆 7"></div><div class="heart-photo" id="heartPhoto7" style="transform: translate(calc(-50% - 26.153px), calc(-50% - 35.0015px)) scale(0.3) rotate(-9.11313deg); opacity: 0;"><img src="https://picsum.photos/seed/memory7/600/800?blur=0" alt="回忆 8"></div><div class="heart-photo" id="heartPhoto8" style="transform: translate(calc(-50% + 131.112px), calc(-50% - 218.577px)) scale(0.3) rotate(-21.5433deg); opacity: 0;"><img src="https://picsum.photos/seed/memory8/600/800?blur=0" alt="回忆 9"></div><div class="heart-photo" id="heartPhoto9" style="transform: translate(calc(-50% + 51.4347px), calc(-50% - 35.4547px)) scale(0.3) rotate(13.819deg); opacity: 0;"><img src="https://picsum.photos/seed/memory9/600/800?blur=0" alt="回忆 10"></div><div class="heart-photo" id="heartPhoto10" style="transform: translate(calc(-50% - 63.3717px), calc(-50% + 50.9525px)) scale(0.3) rotate(-14.8509deg); opacity: 0;"><img src="https://picsum.photos/seed/memory10/600/800?blur=0" alt="回忆 11"></div><div class="heart-photo" id="heartPhoto11" style="transform: translate(calc(-50% + 203.849px), calc(-50% + 114.943px)) scale(0.3) rotate(11.657deg); opacity: 0;"><img src="https://picsum.photos/seed/memory11/600/800?blur=0" alt="回忆 12"></div><div class="heart-photo" id="heartPhoto12" style="transform: translate(calc(-50% - 299.931px), calc(-50% + 103.449px)) scale(0.3) rotate(-23.3561deg); opacity: 0;"><img src="https://picsum.photos/seed/memory12/600/800?blur=0" alt="回忆 13"></div><div class="heart-photo" id="heartPhoto13" style="transform: translate(calc(-50% + 31.0323px), calc(-50% + 206.615px)) scale(0.3) rotate(1.73121deg); opacity: 0;"><img src="https://picsum.photos/seed/memory13/600/800?blur=0" alt="回忆 14"></div><div class="heart-photo" id="heartPhoto14" style="transform: translate(calc(-50% - 152.181px), calc(-50% + 94.2004px)) scale(0.3) rotate(-18.9499deg); opacity: 0;"><img src="https://picsum.photos/seed/memory14/600/800?blur=0" alt="回忆 15"></div><div class="heart-photo" id="heartPhoto15" style="transform: translate(calc(-50% + 158.379px), calc(-50% + 27.8195px)) scale(0.3) rotate(-0.502559deg); opacity: 0;"><img src="https://picsum.photos/seed/memory15/600/800?blur=0" alt="回忆 16"></div><div class="heart-photo" id="heartPhoto16" style="transform: translate(calc(-50% + 105.038px), calc(-50% - 244.796px)) scale(0.3) rotate(3.07636deg); opacity: 0;"><img src="https://picsum.photos/seed/memory16/600/800?blur=0" alt="回忆 17"></div><div class="heart-photo" id="heartPhoto17" style="transform: translate(calc(-50% + 231.57px), calc(-50% + 124.444px)) scale(0.3) rotate(28.1117deg); opacity: 0;"><img src="https://picsum.photos/seed/memory17/600/800?blur=0" alt="回忆 18"></div><div class="heart-photo" id="heartPhoto18" style="transform: translate(calc(-50% + 153.319px), calc(-50% + 198.66px)) scale(0.3) rotate(12.589deg); opacity: 0;"><img src="https://picsum.photos/seed/memory18/600/800?blur=0" alt="回忆 19"></div><div class="heart-photo" id="heartPhoto19" style="transform: translate(calc(-50% + 83.3743px), calc(-50% - 92.9375px)) scale(0.3) rotate(19.81deg); opacity: 0;"><img src="https://picsum.photos/seed/memory19/600/800?blur=0" alt="回忆 20"></div><div class="heart-photo" id="heartPhoto20" style="transform: translate(calc(-50% + 14.9159px), calc(-50% + 109.897px)) scale(0.3) rotate(26.1181deg); opacity: 0;"><img src="https://picsum.photos/seed/memory20/600/800?blur=0" alt="回忆 21"></div><div class="heart-photo" id="heartPhoto21" style="transform: translate(calc(-50% + 284.492px), calc(-50% + 157.771px)) scale(0.3) rotate(-7.51798deg); opacity: 0;"><img src="https://picsum.photos/seed/memory21/600/800?blur=0" alt="回忆 22"></div><div class="heart-photo" id="heartPhoto22" style="transform: translate(calc(-50% - 256.253px), calc(-50% + 4.47797px)) scale(0.3) rotate(-17.2546deg); opacity: 0;"><img src="https://picsum.photos/seed/memory22/600/800?blur=0" alt="回忆 23"></div><div class="heart-photo" id="heartPhoto23" style="transform: translate(calc(-50% + 1.74746px), calc(-50% + 42.9215px)) scale(0.3) rotate(18.9191deg); opacity: 0;"><img src="https://picsum.photos/seed/memory23/600/800?blur=0" alt="回忆 24"></div><div class="heart-photo" id="heartPhoto24" style="transform: translate(calc(-50% + 191.003px), calc(-50% - 8.30963px)) scale(0.3) rotate(8.07145deg); opacity: 0;"><img src="https://picsum.photos/seed/memory24/600/800?blur=0" alt="回忆 25"></div><div class="heart-photo" id="heartPhoto25" style="transform: translate(calc(-50% - 82.7542px), calc(-50% - 213.867px)) scale(0.3) rotate(11.1667deg); opacity: 0;"><img src="https://picsum.photos/seed/memory25/600/800?blur=0" alt="回忆 26"></div><div class="heart-photo" id="heartPhoto26" style="transform: translate(calc(-50% - 258.028px), calc(-50% + 172.292px)) scale(0.3) rotate(15.5964deg); opacity: 0;"><img src="https://picsum.photos/seed/memory26/600/800?blur=0" alt="回忆 27"></div><div class="heart-photo" id="heartPhoto27" style="transform: translate(calc(-50% - 27.1113px), calc(-50% - 41.0606px)) scale(0.3) rotate(10.1201deg); opacity: 0;"><img src="https://picsum.photos/seed/memory27/600/800?blur=0" alt="回忆 28"></div><div class="heart-photo" id="heartPhoto28" style="transform: translate(calc(-50% + 126.07px), calc(-50% - 145.367px)) scale(0.3) rotate(-28.8424deg); opacity: 0;"><img src="https://picsum.photos/seed/memory28/600/800?blur=0" alt="回忆 29"></div><div class="heart-photo" id="heartPhoto29" style="transform: translate(calc(-50% - 130.469px), calc(-50% - 158.87px)) scale(0.3) rotate(21.5652deg); opacity: 0;"><img src="https://picsum.photos/seed/memory29/600/800?blur=0" alt="回忆 30"></div><div class="heart-photo" id="heartPhoto30" style="transform: translate(calc(-50% + 2.79367px), calc(-50% - 13.6323px)) scale(0.3) rotate(-2.24075deg); opacity: 0;"><img src="https://picsum.photos/seed/memory30/600/800?blur=0" alt="回忆 31"></div><div class="heart-photo" id="heartPhoto31" style="transform: translate(calc(-50% - 24.6821px), calc(-50% - 229.437px)) scale(0.3) rotate(-16.1326deg); opacity: 0;"><img src="https://picsum.photos/seed/memory31/600/800?blur=0" alt="回忆 32"></div><div class="heart-photo" id="heartPhoto32" style="transform: translate(calc(-50% - 177.943px), calc(-50% + 2.06563px)) scale(0.3) rotate(0.370182deg); opacity: 0;"><img src="https://picsum.photos/seed/memory32/600/800?blur=0" alt="回忆 33"></div><div class="heart-photo" id="heartPhoto33" style="transform: translate(calc(-50% - 280.556px), calc(-50% - 47.0067px)) scale(0.3) rotate(-14.3009deg); opacity: 0;"><img src="https://picsum.photos/seed/memory33/600/800?blur=0" alt="回忆 34"></div><div class="heart-photo" id="heartPhoto34" style="transform: translate(calc(-50% - 11.0894px), calc(-50% + 167.85px)) scale(0.3) rotate(-16.8724deg); opacity: 0;"><img src="https://picsum.photos/seed/memory34/600/800?blur=0" alt="回忆 35"></div><div class="heart-photo" id="heartPhoto35" style="transform: translate(calc(-50% + 77.7125px), calc(-50% + 41.5997px)) scale(0.3) rotate(4.62404deg); opacity: 0;"><img src="https://picsum.photos/seed/memory35/600/800?blur=0" alt="回忆 36"></div><div class="heart-photo" id="heartPhoto36" style="transform: translate(calc(-50% + 8.96398px), calc(-50% + 183.979px)) scale(0.3) rotate(22.1706deg); opacity: 0;"><img src="https://picsum.photos/seed/memory36/600/800?blur=0" alt="回忆 37"></div><div class="heart-photo" id="heartPhoto37" style="transform: translate(calc(-50% - 22.8333px), calc(-50% - 51.9539px)) scale(0.3) rotate(-16.1645deg); opacity: 0;"><img src="https://picsum.photos/seed/memory37/600/800?blur=0" alt="回忆 38"></div><div class="heart-photo" id="heartPhoto38" style="transform: translate(calc(-50% + 36.1469px), calc(-50% + 44.0189px)) scale(0.3) rotate(2.08486deg); opacity: 0;"><img src="https://picsum.photos/seed/memory38/600/800?blur=0" alt="回忆 39"></div><div class="heart-photo" id="heartPhoto39" style="transform: translate(calc(-50% - 237.855px), calc(-50% + 24.4845px)) scale(0.3) rotate(22.1796deg); opacity: 0;"><img src="https://picsum.photos/seed/memory39/600/800?blur=0" alt="回忆 40"></div><div class="heart-photo" id="heartPhoto40" style="transform: translate(calc(-50% + 282.477px), calc(-50% - 33.9832px)) scale(0.3) rotate(3.41016deg); opacity: 0;"><img src="https://picsum.photos/seed/memory40/600/800?blur=0" alt="回忆 41"></div><div class="heart-photo" id="heartPhoto41" style="transform: translate(calc(-50% - 216.332px), calc(-50% + 14.5395px)) scale(0.3) rotate(1.57575deg); opacity: 0;"><img src="https://picsum.photos/seed/memory41/600/800?blur=0" alt="回忆 42"></div><div class="heart-photo" id="heartPhoto0" style="transform: translate(calc(-50% - 117.751px), calc(-50% - 108.666px)) scale(0.3) rotate(26.5496deg); opacity: 0;"><img src="https://picsum.photos/seed/memory0/600/800?blur=0" alt="回忆 1"></div><div class="heart-photo" id="heartPhoto1" style="transform: translate(calc(-50% - 245.603px), calc(-50% - 12.1659px)) scale(0.3) rotate(-19.7739deg); opacity: 0;"><img src="https://picsum.photos/seed/memory1/600/800?blur=0" alt="回忆 2"></div><div class="heart-photo" id="heartPhoto2" style="transform: translate(calc(-50% + 171.722px), calc(-50% + 46.4844px)) scale(0.3) rotate(0.228695deg); opacity: 0;"><img src="https://picsum.photos/seed/memory2/600/800?blur=0" alt="回忆 3"></div><div class="heart-photo" id="heartPhoto3" style="transform: translate(calc(-50% + 188.521px), calc(-50% + 33.1215px)) scale(0.3) rotate(-23.454deg); opacity: 0;"><img src="https://picsum.photos/seed/memory3/600/800?blur=0" alt="回忆 4"></div><div class="heart-photo" id="heartPhoto4" style="transform: translate(calc(-50% - 62.4105px), calc(-50% - 114.175px)) scale(0.3) rotate(7.26409deg); opacity: 0;"><img src="https://picsum.photos/seed/memory4/600/800?blur=0" alt="回忆 5"></div><div class="heart-photo" id="heartPhoto5" style="transform: translate(calc(-50% - 290.668px), calc(-50% - 236.782px)) scale(0.3) rotate(-19.4409deg); opacity: 0;"><img src="https://picsum.photos/seed/memory5/600/800?blur=0" alt="回忆 6"></div><div class="heart-photo" id="heartPhoto6" style="transform: translate(calc(-50% + 283.642px), calc(-50% - 233.695px)) scale(0.3) rotate(20.7537deg); opacity: 0;"><img src="https://picsum.photos/seed/memory6/600/800?blur=0" alt="回忆 7"></div><div class="heart-photo" id="heartPhoto7" style="transform: translate(calc(-50% - 76.5818px), calc(-50% + 194.465px)) scale(0.3) rotate(12.205deg); opacity: 0;"><img src="https://picsum.photos/seed/memory7/600/800?blur=0" alt="回忆 8"></div><div class="heart-photo" id="heartPhoto8" style="transform: translate(calc(-50% + 40.8638px), calc(-50% - 126.41px)) scale(0.3) rotate(25.773deg); opacity: 0;"><img src="https://picsum.photos/seed/memory8/600/800?blur=0" alt="回忆 9"></div><div class="heart-photo" id="heartPhoto9" style="transform: translate(calc(-50% + 91.3121px), calc(-50% + 92.6021px)) scale(0.3) rotate(-7.71766deg); opacity: 0;"><img src="https://picsum.photos/seed/memory9/600/800?blur=0" alt="回忆 10"></div><div class="heart-photo" id="heartPhoto10" style="transform: translate(calc(-50% - 252.324px), calc(-50% + 238.416px)) scale(0.3) rotate(-9.95035deg); opacity: 0;"><img src="https://picsum.photos/seed/memory10/600/800?blur=0" alt="回忆 11"></div><div class="heart-photo" id="heartPhoto11" style="transform: translate(calc(-50% + 81.0604px), calc(-50% - 132.063px)) scale(0.3) rotate(-9.19773deg); opacity: 0;"><img src="https://picsum.photos/seed/memory11/600/800?blur=0" alt="回忆 12"></div><div class="heart-photo" id="heartPhoto12" style="transform: translate(calc(-50% - 276.059px), calc(-50% + 6.34645px)) scale(0.3) rotate(21.5792deg); opacity: 0;"><img src="https://picsum.photos/seed/memory12/600/800?blur=0" alt="回忆 13"></div><div class="heart-photo" id="heartPhoto13" style="transform: translate(calc(-50% + 47.1877px), calc(-50% + 96.6051px)) scale(0.3) rotate(4.69628deg); opacity: 0;"><img src="https://picsum.photos/seed/memory13/600/800?blur=0" alt="回忆 14"></div><div class="heart-photo" id="heartPhoto14" style="transform: translate(calc(-50% + 117.88px), calc(-50% - 156.523px)) scale(0.3) rotate(27.2276deg); opacity: 0;"><img src="https://picsum.photos/seed/memory14/600/800?blur=0" alt="回忆 15"></div><div class="heart-photo" id="heartPhoto15" style="transform: translate(calc(-50% + 69.1554px), calc(-50% - 194.267px)) scale(0.3) rotate(9.24922deg); opacity: 0;"><img src="https://picsum.photos/seed/memory15/600/800?blur=0" alt="回忆 16"></div><div class="heart-photo" id="heartPhoto16" style="transform: translate(calc(-50% + 76.9451px), calc(-50% - 219.347px)) scale(0.3) rotate(23.859deg); opacity: 0;"><img src="https://picsum.photos/seed/memory16/600/800?blur=0" alt="回忆 17"></div><div class="heart-photo" id="heartPhoto17" style="transform: translate(calc(-50% + 189.465px), calc(-50% - 94.8591px)) scale(0.3) rotate(-10.6474deg); opacity: 0;"><img src="https://picsum.photos/seed/memory17/600/800?blur=0" alt="回忆 18"></div><div class="heart-photo" id="heartPhoto18" style="transform: translate(calc(-50% - 262.102px), calc(-50% + 4.19949px)) scale(0.3) rotate(15.4139deg); opacity: 0;"><img src="https://picsum.photos/seed/memory18/600/800?blur=0" alt="回忆 19"></div><div class="heart-photo" id="heartPhoto19" style="transform: translate(calc(-50% - 286.069px), calc(-50% - 108.661px)) scale(0.3) rotate(-20.5217deg); opacity: 0;"><img src="https://picsum.photos/seed/memory19/600/800?blur=0" alt="回忆 20"></div><div class="heart-photo" id="heartPhoto20" style="transform: translate(calc(-50% - 126.319px), calc(-50% - 78.3198px)) scale(0.3) rotate(10.0765deg); opacity: 0;"><img src="https://picsum.photos/seed/memory20/600/800?blur=0" alt="回忆 21"></div><div class="heart-photo" id="heartPhoto21" style="transform: translate(calc(-50% + 135.907px), calc(-50% + 22.3816px)) scale(0.3) rotate(-20.2672deg); opacity: 0;"><img src="https://picsum.photos/seed/memory21/600/800?blur=0" alt="回忆 22"></div><div class="heart-photo" id="heartPhoto22" style="transform: translate(calc(-50% + 190.172px), calc(-50% - 71.2473px)) scale(0.3) rotate(-11.0543deg); opacity: 0;"><img src="https://picsum.photos/seed/memory22/600/800?blur=0" alt="回忆 23"></div><div class="heart-photo" id="heartPhoto23" style="transform: translate(calc(-50% - 78.7635px), calc(-50% + 13.5606px)) scale(0.3) rotate(24.2989deg); opacity: 0;"><img src="https://picsum.photos/seed/memory23/600/800?blur=0" alt="回忆 24"></div><div class="heart-photo" id="heartPhoto24" style="transform: translate(calc(-50% + 275.632px), calc(-50% + 248.139px)) scale(0.3) rotate(-12.2675deg); opacity: 0;"><img src="https://picsum.photos/seed/memory24/600/800?blur=0" alt="回忆 25"></div><div class="heart-photo" id="heartPhoto25" style="transform: translate(calc(-50% - 101.611px), calc(-50% - 211.536px)) scale(0.3) rotate(-2.6281deg); opacity: 0;"><img src="https://picsum.photos/seed/memory25/600/800?blur=0" alt="回忆 26"></div><div class="heart-photo" id="heartPhoto26" style="transform: translate(calc(-50% + 109.571px), calc(-50% - 34.8832px)) scale(0.3) rotate(18.7283deg); opacity: 0;"><img src="https://picsum.photos/seed/memory26/600/800?blur=0" alt="回忆 27"></div><div class="heart-photo" id="heartPhoto27" style="transform: translate(calc(-50% + 85.9897px), calc(-50% + 208.233px)) scale(0.3) rotate(-23.5579deg); opacity: 0;"><img src="https://picsum.photos/seed/memory27/600/800?blur=0" alt="回忆 28"></div><div class="heart-photo" id="heartPhoto28" style="transform: translate(calc(-50% + 44.5999px), calc(-50% + 240.441px)) scale(0.3) rotate(-16.3842deg); opacity: 0;"><img src="https://picsum.photos/seed/memory28/600/800?blur=0" alt="回忆 29"></div><div class="heart-photo" id="heartPhoto29" style="transform: translate(calc(-50% - 122.182px), calc(-50% - 137.483px)) scale(0.3) rotate(-2.56248deg); opacity: 0;"><img src="https://picsum.photos/seed/memory29/600/800?blur=0" alt="回忆 30"></div><div class="heart-photo" id="heartPhoto30" style="transform: translate(calc(-50% + 92.8065px), calc(-50% - 140.98px)) scale(0.3) rotate(3.89314deg); opacity: 0;"><img src="https://picsum.photos/seed/memory30/600/800?blur=0" alt="回忆 31"></div><div class="heart-photo" id="heartPhoto31" style="transform: translate(calc(-50% + 55.2574px), calc(-50% + 212.221px)) scale(0.3) rotate(-10.7059deg); opacity: 0;"><img src="https://picsum.photos/seed/memory31/600/800?blur=0" alt="回忆 32"></div><div class="heart-photo" id="heartPhoto32" style="transform: translate(calc(-50% - 138.538px), calc(-50% + 35.5638px)) scale(0.3) rotate(5.94952deg); opacity: 0;"><img src="https://picsum.photos/seed/memory32/600/800?blur=0" alt="回忆 33"></div><div class="heart-photo" id="heartPhoto33" style="transform: translate(calc(-50% - 8.9966px), calc(-50% - 115.749px)) scale(0.3) rotate(-18.1462deg); opacity: 0;"><img src="https://picsum.photos/seed/memory33/600/800?blur=0" alt="回忆 34"></div><div class="heart-photo" id="heartPhoto34" style="transform: translate(calc(-50% - 36.6455px), calc(-50% - 129.623px)) scale(0.3) rotate(-3.30746deg); opacity: 0;"><img src="https://picsum.photos/seed/memory34/600/800?blur=0" alt="回忆 35"></div><div class="heart-photo" id="heartPhoto35" style="transform: translate(calc(-50% + 83.9609px), calc(-50% + 145.465px)) scale(0.3) rotate(-29.0976deg); opacity: 0;"><img src="https://picsum.photos/seed/memory35/600/800?blur=0" alt="回忆 36"></div><div class="heart-photo" id="heartPhoto36" style="transform: translate(calc(-50% - 202.414px), calc(-50% - 44.8665px)) scale(0.3) rotate(12.8738deg); opacity: 0;"><img src="https://picsum.photos/seed/memory36/600/800?blur=0" alt="回忆 37"></div><div class="heart-photo" id="heartPhoto37" style="transform: translate(calc(-50% - 124.563px), calc(-50% - 53.9639px)) scale(0.3) rotate(26.3808deg); opacity: 0;"><img src="https://picsum.photos/seed/memory37/600/800?blur=0" alt="回忆 38"></div><div class="heart-photo" id="heartPhoto38" style="transform: translate(calc(-50% - 240.887px), calc(-50% - 97.2871px)) scale(0.3) rotate(6.53021deg); opacity: 0;"><img src="https://picsum.photos/seed/memory38/600/800?blur=0" alt="回忆 39"></div><div class="heart-photo" id="heartPhoto39" style="transform: translate(calc(-50% - 239.649px), calc(-50% - 63.6935px)) scale(0.3) rotate(26.8727deg); opacity: 0;"><img src="https://picsum.photos/seed/memory39/600/800?blur=0" alt="回忆 40"></div><div class="heart-photo" id="heartPhoto40" style="transform: translate(calc(-50% - 172.458px), calc(-50% - 71.7166px)) scale(0.3) rotate(-8.00712deg); opacity: 0;"><img src="https://picsum.photos/seed/memory40/600/800?blur=0" alt="回忆 41"></div><div class="heart-photo" id="heartPhoto41" style="transform: translate(calc(-50% + 145.178px), calc(-50% - 81.8331px)) scale(0.3) rotate(4.54259deg); opacity: 0;"><img src="https://picsum.photos/seed/memory41/600/800?blur=0" alt="回忆 42"></div></div>
+  <div class="finale-message" id="finaleMessage">
+    <h2>生日快乐</h2>
+    <p>愿你永远被爱 永远快乐 永远闪耀</p>
+  </div>
+</section>
+
+<script>
+/* ==================== 图片数据 ==================== */
+const API_BASE = 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image';
+const IMAGE_SIZE = 'portrait_4_3';
+function imgUrl(prompt, seed){return `https://picsum.photos/seed/memory${seed}/600/800?blur=0`}
+
+const imagePrompts = [
+  "Dreamy pink cherry blossom path with falling petals, pastel, bokeh",
+  "Fantasy castle under purple starry sky, dreamy pastel illustration, sparkles",
+  "Pink fluffy clouds at golden sunset, dreamy atmosphere, pastel colors",
+  "Open vintage crystal music box with magical light, pink purple fantasy",
+  "Field of pink flowers under soft rainbow, dreamy pastel landscape",
+  "White unicorn in enchanted pastel forest, dreamy fantasy art, sparkles",
+  "Floating paper lanterns in purple pink night sky, dreamy bokeh",
+  "Vintage pink bicycle with flower basket, dreamy pastel spring scene",
+  "Hot air balloons over pastel mountain range, dreamy sunset",
+  "Pink rose garden with fairy lights, dreamy soft focus, pastel",
+  "Moonlit lake with pink lotus flowers, dreamy pastel night scene",
+  "Sparkling birthday cake with pink candles, dreamy pastel celebration",
+  "Snowy pastel pine forest at twilight with magical lights, dreamy",
+  "Magical fairy tea party on pastel clouds, dreamy fantasy, sparkles",
+  "Pastel butterfly garden with glowing flowers, dreamy soft focus",
+  "Crystal palace under aurora borealis, dreamy pastel purple fantasy",
+  "Dreamy pastel carousel with golden horses, magical bokeh lights",
+  "Floating crystal balloons in pink purple sky, dreamy soft focus",
+  "Pastel rainbow waterfall in enchanted valley, dreamy fantasy landscape",
+  "Magical fairy library with floating books, dreamy pastel interior",
+  "Pastel sakura petals floating on dreamy lake, mirror reflection",
+  "Enchanted pastel mushroom forest, dreamy fantasy world, bokeh lights",
+  "Pastel starry desert with magical oasis, dreamy pink purple fantasy",
+  "Crystal peacock with pastel feathers, dreamy fantasy art, sparkles",
+  "Pastel candy kingdom with lollipop towers, dreamy fantasy, sparkles",
+  "Magical pastel waterfall glowing under stars, dreamy night scene",
+  "Dreamy pastel sky lantern festival, hundreds of floating lanterns",
+  "Crystal rose frozen in ice, dreamy pastel winter scene, bokeh",
+  "Pastel mermaid on magical coral reef, dreamy ocean fantasy, sparkles",
+  "Glowing pastel jellyfish floating in night sky, dreamy fantasy",
+  "Dreamy pastel fox with nine tails, cherry blossom petals, magical",
+  "Pastel dragon flying over rainbow mountains, dreamy fantasy art",
+  "Dreamy pastel clock tower in cloud city, magical sunset, bokeh",
+  "Crystal violin with glowing pastel notes, dreamy music fantasy",
+  "Pastel swan on dreamy pink lake at sunrise, soft pastel bokeh",
+  "Dreamy pastel phoenix rising from pink flames, fantasy art",
+  "Magical pastel owl on glowing mushroom, dreamy night forest",
+  "Pastel dreamcatcher with pink feathers, dreamy soft focus",
+  "Dreamy pastel galaxy swirl with stars and nebula, magical",
+  "Crystal fairy wings with pastel light, dreamy fantasy portrait",
+  "Pastel moon castle floating in clouds, dreamy fantasy night",
+  "Dreamy pastel candy cane forest with sparkles, magical winter"
+];
+const imageUrls = imagePrompts.map((prompt, idx) => imgUrl(prompt, idx));
+
+/* ==================== 星空粒子 ==================== */
+const canvas = document.getElementById('starfield');
+const ctx = canvas.getContext('2d');
+let stars = [];
+let shootingStars = [];
+
+function resizeCanvas(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+function initStars(){
+  stars = [];
+  const count = Math.floor((canvas.width * canvas.height) / 6000);
+  for(let i=0;i<count;i++){
+    stars.push({
+      x: Math.random()*canvas.width,
+      y: Math.random()*canvas.height,
+      r: Math.random()*1.5+0.3,
+      a: Math.random()*0.5+0.2,
+      phase: Math.random()*Math.PI*2,
+      speed: Math.random()*0.02+0.005,
+      hue: Math.random()<0.3 ? 'gold' : (Math.random()<0.5 ? 'pink' : 'white')
+    });
+  }
+}
+initStars();
+
+function spawnShootingStar(){
+  if(Math.random() < 0.003 && shootingStars.length < 3){
+    shootingStars.push({
+      x: Math.random()*canvas.width,
+      y: Math.random()*canvas.height*0.4,
+      len: Math.random()*80+40,
+      speed: Math.random()*8+5,
+      angle: Math.PI/4 + (Math.random()-0.5)*0.3,
+      life: 1
+    });
+  }
+}
+
+function drawStarfield(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  for(const s of stars){
+    s.phase += s.speed;
+    const alpha = s.a * (0.5 + 0.5*Math.sin(s.phase));
+    let color;
+    if(s.hue === 'gold') color = `rgba(255,215,0,${alpha})`;
+    else if(s.hue === 'pink') color = `rgba(255,182,193,${alpha})`;
+    else color = `rgba(255,248,251,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    if(s.r > 1){
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = color;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  spawnShootingStar();
+  for(let i = shootingStars.length-1; i>=0; i--){
+    const ss = shootingStars[i];
+    const dx = Math.cos(ss.angle)*ss.speed;
+    const dy = Math.sin(ss.angle)*ss.speed;
+    ss.x += dx; ss.y += dy; ss.life -= 0.02;
+    const grad = ctx.createLinearGradient(ss.x, ss.y, ss.x - Math.cos(ss.angle)*ss.len, ss.y - Math.sin(ss.angle)*ss.len);
+    grad.addColorStop(0, `rgba(255,240,245,${ss.life})`);
+    grad.addColorStop(1, 'rgba(255,240,245,0)');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ss.x, ss.y);
+    ctx.lineTo(ss.x - Math.cos(ss.angle)*ss.len, ss.y - Math.sin(ss.angle)*ss.len);
+    ctx.stroke();
+    if(ss.life <= 0 || ss.x > canvas.width || ss.y > canvas.height) shootingStars.splice(i,1);
+  }
+
+  requestAnimationFrame(drawStarfield);
+}
+drawStarfield();
+
+/* 漂浮粒子 */
+function createFloatParticles(){
+  for(let i=0;i<15;i++){
+    const p = document.createElement('div');
+    p.className = 'float-particle';
+    const size = Math.random()*4+2;
+    p.style.width = size+'px';
+    p.style.height = size+'px';
+    p.style.left = Math.random()*100+'%';
+    p.style.bottom = '-10px';
+    p.style.animationDuration = (Math.random()*15+10)+'s';
+    p.style.animationDelay = (Math.random()*10)+'s';
+    p.style.setProperty('--drift', (Math.random()*100-50)+'px');
+    p.style.background = ['rgba(255,182,193,0.4)','rgba(200,162,200,0.4)','rgba(255,215,0,0.3)'][Math.floor(Math.random()*3)];
+    document.body.appendChild(p);
+  }
+}
+createFloatParticles();
+
+/* ==================== 八音盒音乐合成器 ==================== */
+class MusicBox {
+  constructor(){
+    this.ctx = null;
+    this.masterGain = null;
+    this.filter = null;
+    this.notes = [];
+    this.melodyNotes = [];
+    this.melodyDuration = 0;
+    this.totalDuration = 259; // 4:19
+    this.isPlaying = false;
+    this.startCtxTime = 0;
+    this.offset = 0;
+    this.nextNoteIdx = 0;
+    this.onTimeUpdate = null;
+    this.onEnd = null;
+    this.hasEnded = false;
+  }
+
+  init(){
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.masterGain = this.ctx.createGain();
+    this.masterGain.gain.value = 0;
+
+    // 低通滤波器（让音色更柔和）
+    this.filter = this.ctx.createBiquadFilter();
+    this.filter.type = 'lowpass';
+    this.filter.frequency.value = 4500;
+    this.filter.Q.value = 0.5;
+
+    // 简易混响
+    const convolver = this.ctx.createConvolver();
+    const length = this.ctx.sampleRate * 2;
+    const impulse = this.ctx.createBuffer(2, length, this.ctx.sampleRate);
+    for(let c=0;c<2;c++){
+      const data = impulse.getChannelData(c);
+      for(let i=0;i<length;i++){
+        data[i] = (Math.random()*2-1) * Math.pow(1 - i/length, 2.5);
+      }
+    }
+    convolver.buffer = impulse;
+    const reverbGain = this.ctx.createGain();
+    reverbGain.gain.value = 0.18;
+
+    this.masterGain.connect(this.filter);
+    this.filter.connect(this.ctx.destination);
+    this.filter.connect(convolver);
+    convolver.connect(reverbGain);
+    reverbGain.connect(this.ctx.destination);
+
+    // 渐入
+    this.masterGain.gain.linearRampToValueAtTime(0.35, this.ctx.currentTime + 1.5);
+
+    this.generateMelody();
+  }
+
+  generateMelody(){
+    // 生日快乐歌 旋律
+    const melodyData = [
+      // Happy birthday to you
+      {f:392.00,d:0.375},{f:392.00,d:0.375},{f:440.00,d:0.75},{f:392.00,d:0.75},{f:523.25,d:0.75},{f:493.88,d:1.5},
+      // Happy birthday to you
+      {f:392.00,d:0.375},{f:392.00,d:0.375},{f:440.00,d:0.75},{f:392.00,d:0.75},{f:587.33,d:0.75},{f:523.25,d:1.5},
+      // Happy birthday dear ___
+      {f:392.00,d:0.375},{f:392.00,d:0.375},{f:783.99,d:0.75},{f:659.25,d:0.75},{f:523.25,d:0.75},{f:493.88,d:0.75},{f:440.00,d:1.5},
+      // Happy birthday to you
+      {f:698.46,d:0.375},{f:698.46,d:0.375},{f:659.25,d:0.75},{f:523.25,d:0.75},{f:587.33,d:0.75},{f:523.25,d:1.5},
+    ];
+
+    // 计算单次旋律时长
+    let t = 0;
+    this.melodyNotes = melodyData.map(n => {
+      const note = {freq: n.f, time: t, dur: n.d};
+      t += n.d;
+      return note;
+    });
+    this.melodyDuration = t + 0.5; // 旋律时长 + 间隔
+
+    // 预生成 4:19 内所有音符
+    this.notes = [];
+    let time = 0;
+    while(time < this.totalDuration){
+      for(const n of this.melodyNotes){
+        if(time + n.time >= this.totalDuration) break;
+        this.notes.push({freq: n.freq, time: time + n.time, dur: n.dur});
+      }
+      time += this.melodyDuration;
+    }
+  }
+
+  get currentTime(){
+    if(!this.isPlaying || !this.ctx) return this.offset;
+    return this.offset + (this.ctx.currentTime - this.startCtxTime);
+  }
+
+  play(){
+    if(!this.ctx) this.init();
+    if(this.ctx.state === 'suspended') this.ctx.resume();
+    this.isPlaying = true;
+    this.startCtxTime = this.ctx.currentTime;
+    this.updateNextNoteIndex();
+    this.scheduler();
+  }
+
+  seek(time){
+    time = Math.max(0, Math.min(time, this.totalDuration));
+    if(this.ctx){
+      this.offset = time;
+      this.startCtxTime = this.ctx.currentTime;
+    } else {
+      this.offset = time;
+    }
+    this.updateNextNoteIndex();
+    if(this.onTimeUpdate) this.onTimeUpdate(time);
+  }
+
+  updateNextNoteIndex(){
+    const t = this.currentTime;
+    let idx = this.notes.findIndex(n => n.time >= t);
+    if(idx < 0) idx = 0;
+    this.nextNoteIdx = idx;
+  }
+
+  scheduler(){
+    if(!this.isPlaying) return;
+    const now = this.ctx.currentTime;
+    const t = this.currentTime;
+
+    // 调度未来0.2秒内的音符
+    while(this.nextNoteIdx < this.notes.length && this.notes[this.nextNoteIdx].time < t + 0.2){
+      const note = this.notes[this.nextNoteIdx];
+      const when = now + (note.time - t);
+      if(when >= now - 0.01){
+        this.playNote(note.freq, when, note.dur);
+      }
+      this.nextNoteIdx++;
+    }
+
+    // 到达终点 → 循环
+    if(t >= this.totalDuration){
+      if(!this.hasEnded){
+        this.hasEnded = true;
+        if(this.onEnd) this.onEnd();
+      }
+      // 循环回到开头
+      this.offset = 0;
+      this.startCtxTime = now;
+      this.nextNoteIdx = 0;
+    }
+
+    if(this.onTimeUpdate){
+      const displayTime = Math.min(t, this.totalDuration);
+      this.onTimeUpdate(displayTime);
+    }
+
+    requestAnimationFrame(() => this.scheduler());
+  }
+
+  playNote(freq, when, duration){
+    const dur = Math.max(duration, 0.1);
+
+    // 基音 sine
+    const osc1 = this.ctx.createOscillator();
+    const g1 = this.ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.value = freq;
+    g1.gain.setValueAtTime(0, when);
+    g1.gain.linearRampToValueAtTime(0.28, when + 0.005);
+    g1.gain.exponentialRampToValueAtTime(0.001, when + dur * 0.9);
+    osc1.connect(g1); g1.connect(this.masterGain);
+    osc1.start(when); osc1.stop(when + dur);
+
+    // 泛音 2x
+    const osc2 = this.ctx.createOscillator();
+    const g2 = this.ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.value = freq * 2;
+    g2.gain.setValueAtTime(0, when);
+    g2.gain.linearRampToValueAtTime(0.08, when + 0.005);
+    g2.gain.exponentialRampToValueAtTime(0.001, when + dur * 0.5);
+    osc2.connect(g2); g2.connect(this.masterGain);
+    osc2.start(when); osc2.stop(when + dur);
+
+    // 泛音 3x
+    const osc3 = this.ctx.createOscillator();
+    const g3 = this.ctx.createGain();
+    osc3.type = 'sine';
+    osc3.frequency.value = freq * 3;
+    g3.gain.setValueAtTime(0, when);
+    g3.gain.linearRampToValueAtTime(0.035, when + 0.005);
+    g3.gain.exponentialRampToValueAtTime(0.001, when + dur * 0.3);
+    osc3.connect(g3); g3.connect(this.masterGain);
+    osc3.start(when); osc3.stop(when + dur);
+  }
+}
+
+const musicBox = new MusicBox();
+
+/* ==================== 单卡居中轮播（基于音乐时间轴） ==================== */
+const memoryCarousel = document.getElementById('memoryCarousel');
+const memoryLeftZone = document.getElementById('memoryLeftZone');
+const memoryRightZone = document.getElementById('memoryRightZone');
+const diskCoverImg = document.getElementById('diskCoverImg');
+const NUM_PHOTOS = 42;
+
+// 配文（与每张图匹配）
+const memoryCaptions = [
+  '樱花飘落的小径 · 初遇的春天',
+  '星空下的城堡 · 童话的开始',
+  '粉色云端的黄昏 · 温柔的午后',
+  '水晶八音盒 · 珍藏的秘密',
+  '彩虹下的花海 · 一起许过的愿',
+  '独角兽的森林 · 梦境的入口',
+  '天灯升起的夜 · 心愿的寄托',
+  '粉色单车的午后 · 青春的剪影',
+  '热气球升空 · 远方的召唤',
+  '玫瑰园的光点 · 浪漫的约定',
+  '月光下的荷塘 · 静谧的回忆',
+  '生日蛋糕的烛光 · 今日的主角',
+  '雪夜的松林 · 一起走过的小路',
+  '云端茶会 · 童话里的一天',
+  '蝴蝶花径 · 春日的小确幸',
+  '极光下的水晶宫 · 童话梦境',
+  '旋转木马 · 童年与现在',
+  '水晶气球 · 漂浮的幻想',
+  '彩虹瀑布 · 倾泻的时光',
+  '魔法图书馆 · 翻开的章节',
+  '樱花湖面 · 倒影中的你我',
+  '蘑菇森林 · 童年的探险',
+  '星空绿洲 · 沙漠的奇迹',
+  '水晶孔雀 · 绽开的回忆',
+  '糖果王国 · 甜入心扉的一天',
+  '星光下的瀑布 · 梦幻银河',
+  '天灯节 · 一千个心愿升空',
+  '冰封玫瑰 · 晶莹的誓言',
+  '珊瑚礁的美人鱼 · 海底童话',
+  '夜空中漂浮的水母 · 发光的梦',
+  '九尾狐 · 樱花下的倩影',
+  '彩虹山的飞龙 · 守护者的低语',
+  '云端钟塔 · 时光的指针',
+  '水晶小提琴 · 流动的旋律',
+  '晨曦中的天鹅 · 静谧的优雅',
+  '粉焰凤凰 · 重生的希望',
+  '魔法猫头鹰 · 森林的智者',
+  '捕梦网 · 留住每一个好梦',
+  '星系漩涡 · 宇宙的呼吸',
+  '水晶仙翼 · 闪烁的光尘',
+  '月宫城堡 · 漂浮的仙境',
+  '拐杖糖森林 · 甜蜜的冬天',
+];
+
+function buildMemoryCards(){
+  for(let i=0;i<NUM_PHOTOS;i++){
+    const card = document.createElement('div');
+    card.className = 'memory-card';
+    card.dataset.index = i;
+    card.innerHTML = `<img src="${imageUrls[i]}" alt="回忆 ${i+1}" loading="lazy">
+                      <div class="caption">${memoryCaptions[i] || ('回忆 · ' + (i+1))}</div>`;
+    memoryCarousel.appendChild(card);
+  }
+}
+buildMemoryCards();
+
+const memoryCards = document.querySelectorAll('.memory-card');
+let currentCardIdx = -1;
+
+function getSingleCardDuration(){
+  return musicBox.totalDuration / NUM_PHOTOS;
+}
+
+function getCurrentMemoryIndex(){
+  const t = musicBox.currentTime;
+  const singleDur = getSingleCardDuration();
+  return Math.min(Math.floor(t / singleDur), NUM_PHOTOS - 1);
+}
+
+/* 5层级：active/prev1/prev2/next1/next2 */
+function updateMemoryCarousel(time){
+  const idx = getCurrentMemoryIndex();
+  if(idx === currentCardIdx) return;
+  currentCardIdx = idx;
+
+  memoryCards.forEach((card, i) => {
+    card.classList.remove('active','prev1','prev2','next1','next2');
+    const diff = i - idx;
+    if(diff === 0) card.classList.add('active');
+    else if(diff === -1) card.classList.add('prev1');
+    else if(diff === -2) card.classList.add('prev2');
+    else if(diff === 1) card.classList.add('next1');
+    else if(diff === 2) card.classList.add('next2');
+  });
+}
+
+function goToMemory(index){
+  index = Math.max(0, Math.min(NUM_PHOTOS - 1, index));
+  const singleDur = getSingleCardDuration();
+  musicBox.seek(index * singleDur + 0.01);
+  updateMemoryCarousel(musicBox.currentTime);
+}
+
+/* 左右翻页 = 前进/后退 10 秒（同步音乐与图片） */
+memoryLeftZone.addEventListener('click', (e) => {
+  e.stopPropagation();
+  musicBox.seek(Math.max(0, musicBox.currentTime - 10));
+  updateMemoryCarousel(musicBox.currentTime);
+});
+memoryRightZone.addEventListener('click', (e) => {
+  e.stopPropagation();
+  musicBox.seek(Math.min(musicBox.totalDuration, musicBox.currentTime + 10));
+  updateMemoryCarousel(musicBox.currentTime);
+});
+
+/* ===== 唱片中心：每2秒随机切换图片（不与 active/prev1/next1/当前相同） ===== */
+let currentVinylIdx = -1;
+let vinylSwapTimer = null;
+
+function getForbidIndices(){
+  const forbid = new Set();
+  if(currentCardIdx >= 0){
+    forbid.add(currentCardIdx);
+    forbid.add(currentCardIdx - 1);
+    forbid.add(currentCardIdx + 1);
+  }
+  if(currentVinylIdx >= 0) forbid.add(currentVinylIdx);
+  return forbid;
+}
+
+function swapVinylImage(){
+  if(NUM_PHOTOS < 4) return;
+  const forbid = getForbidIndices();
+  let randomIdx;
+  let attempts = 0;
+  do {
+    randomIdx = Math.floor(Math.random() * NUM_PHOTOS);
+    attempts++;
+  } while(forbid.has(randomIdx) && attempts < 50);
+  if(forbid.has(randomIdx)) return;
+  currentVinylIdx = randomIdx;
+  diskCoverImg.style.opacity = '0';
+  diskCoverImg.style.transform = 'scale(0.92)';
+  setTimeout(() => {
+    diskCoverImg.src = imageUrls[randomIdx];
+    diskCoverImg.style.opacity = '1';
+    diskCoverImg.style.transform = 'scale(1)';
+  }, 350);
+}
+
+function startVinylSwap(){
+  if(currentVinylIdx < 0){
+    const forbid = getForbidIndices();
+    let idx = Math.floor(Math.random() * NUM_PHOTOS);
+    while(forbid.has(idx)) idx = Math.floor(Math.random() * NUM_PHOTOS);
+    currentVinylIdx = idx;
+    diskCoverImg.src = imageUrls[idx];
+  }
+  if(vinylSwapTimer) clearInterval(vinylSwapTimer);
+  vinylSwapTimer = setInterval(swapVinylImage, 2000);
+}
+function stopVinylSwap(){
+  if(vinylSwapTimer){
+    clearInterval(vinylSwapTimer);
+    vinylSwapTimer = null;
+  }
+}
+
+/* ==================== 歌词同步 ==================== */
+const lyricsText = document.getElementById('lyricsText');
+const lyricsData = [
+  {time:0,     text:"翻开记忆的相册 每一页都闪耀着光芒"},
+  {time:18,    text:"那些属于我们的时光 在记忆中永不褪色"},
+  {time:36,    text:"春去秋来 岁月如歌 我们一路相伴"},
+  {time:54,    text:"每一张照片 都是一份温暖的回忆"},
+  {time:72,    text:"生日快乐 亲爱的朋友 愿你的世界充满阳光"},
+  {time:90,    text:"愿你的笑容永远灿烂 如星光般闪耀"},
+  {time:108,   text:"时光飞逝 岁月如歌 但我们的友谊永不褪色"},
+  {time:126,   text:"每一段回忆都是珍贵的礼物 每一刻都值得珍藏"},
+  {time:144,   text:"生日快乐 亲爱的朋友 愿你被这世界温柔以待"},
+  {time:162,   text:"愿你所有的心愿都能实现 愿你永远快乐"},
+  {time:180,   text:"让我们举杯庆祝 这特别的一天 属于你"},
+  {time:198,   text:"你值得世间所有的美好 所有的温柔 所有的爱"},
+  {time:216,   text:"生日快乐 最好的朋友 愿星光为你指引方向"},
+  {time:234,   text:"愿你的未来 如这些照片一样 美好"},
+  {time:252,   text:"愿你永远被爱 永远快乐 永远做最闪耀的自己"}
+];
+let currentLyricIdx = -1;
+
+function updateLyrics(time){
+  let idx = 0;
+  for(let i=0;i<lyricsData.length;i++){
+    if(time >= lyricsData[i].time) idx = i;
+    else break;
+  }
+  if(idx !== currentLyricIdx){
+    currentLyricIdx = idx;
+    lyricsText.classList.add('fading');
+    setTimeout(() => {
+      lyricsText.textContent = lyricsData[idx].text;
+      lyricsText.classList.remove('fading');
+    }, 400);
+  }
+}
+
+/* ==================== 进度条 ==================== */
+const progressTrack = document.getElementById('progressTrack');
+const progressFill = document.getElementById('progressFill');
+const progressThumb = document.getElementById('progressThumb');
+const currentTimeEl = document.getElementById('currentTime');
+const totalTimeEl = document.getElementById('totalTime');
+
+function formatTime(s){
+  const m = Math.floor(s/60);
+  const sec = Math.floor(s%60);
+  return `${m}:${sec.toString().padStart(2,'0')}`;
+}
+
+function updateProgressBar(time){
+  const pct = (time / musicBox.totalDuration) * 100;
+  progressFill.style.width = pct + '%';
+  progressThumb.style.left = pct + '%';
+  currentTimeEl.textContent = formatTime(time);
+}
+
+let isDragging = false;
+
+function seekToX(clientX){
+  const rect = progressTrack.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const ratio = Math.max(0, Math.min(1, x / rect.width));
+  const time = ratio * musicBox.totalDuration;
+  musicBox.seek(time);
+  updateMemoryCarousel(time);
+  updateLyrics(time);
+  updateProgressBar(time);
+}
+
+progressTrack.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  seekToX(e.clientX);
+});
+document.addEventListener('mousemove', (e) => {
+  if(isDragging) seekToX(e.clientX);
+});
+document.addEventListener('mouseup', () => { isDragging = false; });
+
+// 触摸支持
+progressTrack.addEventListener('touchstart', (e) => {
+  isDragging = true;
+  seekToX(e.touches[0].clientX);
+});
+document.addEventListener('touchmove', (e) => {
+  if(isDragging) seekToX(e.touches[0].clientX);
+});
+document.addEventListener('touchend', () => { isDragging = false; });
+
+/* ==================== 场景切换 ==================== */
+let currentScene = 'intro';
+const transFlash = document.getElementById('transFlash');
+
+function transitionTo(sceneId){
+  if(currentScene === sceneId) return;
+  // 闪光
+  transFlash.classList.remove('flash');
+  void transFlash.offsetWidth;
+  transFlash.classList.add('flash');
+
+  const current = document.querySelector('.scene.active');
+  if(current) current.classList.remove('active');
+  setTimeout(() => {
+    document.getElementById(sceneId).classList.add('active');
+    currentScene = sceneId;
+
+    if(sceneId === 'finale'){
+      setTimeout(animateHeart, 800);
+    }
+  }, 200);
+}
+
+/* ==================== 开场点击 → 回忆 ==================== */
+document.getElementById('intro').addEventListener('click', () => {
+  musicBox.play();
+  transitionTo('memories');
+  startVinylSwap();
+  // 初始化第一张卡为active
+  updateMemoryCarousel(musicBox.currentTime);
+
+  musicBox.onTimeUpdate = (time) => {
+    if(currentScene !== 'memories') return;
+    updateMemoryCarousel(time);
+    updateLyrics(time);
+    updateProgressBar(time);
+  };
+
+  musicBox.onEnd = () => {
+    if(currentScene === 'memories') transitionTo('interactive');
+  };
+});
+
+/* ==================== 跳过按钮 ==================== */
+document.getElementById('skipBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  transitionTo('interactive');
+});
+
+/* ==================== 蛋糕装饰点 ==================== */
+function addDots(containerId, count){
+  const el = document.getElementById(containerId);
+  for(let i=0;i<count;i++){
+    const dot = document.createElement('div');
+    dot.className = 'cake-dot';
+    dot.style.left = (5 + Math.random()*90) + '%';
+    dot.style.top = (10 + Math.random()*80) + '%';
+    el.appendChild(dot);
+  }
+}
+addDots('dotsBottom', 8);
+addDots('dotsMiddle', 6);
+addDots('dotsTop', 5);
+
+/* ==================== 蜡烛 ==================== */
+const candleRow = document.getElementById('candleRow');
+const CANDLE_COUNT = 5;
+for(let i=0;i<CANDLE_COUNT;i++){
+  const candle = document.createElement('div');
+  candle.className = 'candle';
+  candle.innerHTML = '<div class="flame"></div><div class="smoke"></div>';
+  candleRow.appendChild(candle);
+}
+
+/* ==================== 蛋糕互动 ==================== */
+let cakeClicked = false;
+const cakeArea = document.getElementById('cakeArea');
+const interactiveHint = document.getElementById('interactiveHint');
+const wishText = document.getElementById('wishText');
+
+cakeArea.addEventListener('click', () => {
+  if(cakeClicked) return;
+  cakeClicked = true;
+
+  // 吹灭蜡烛
+  const flames = document.querySelectorAll('.flame');
+  const smokes = document.querySelectorAll('.smoke');
+  flames.forEach((f, i) => {
+    setTimeout(() => {
+      f.classList.add('out');
+      if(smokes[i]) smokes[i].classList.add('active');
+    }, i * 150);
+  });
+
+  // 许愿文字
+  setTimeout(() => {
+    wishText.classList.add('show');
+    interactiveHint.textContent = '愿望已许下 一定会实现';
+  }, 800);
+
+  // 释放气球
+  setTimeout(releaseBalloons, 1000);
+
+  // 撒彩带
+  setTimeout(burstConfetti, 1200);
+
+  // 过渡到结尾
+  setTimeout(() => transitionTo('finale'), 5000);
+});
+
+/* ==================== 气球释放 ==================== */
+function releaseBalloons(){
+  const layer = document.getElementById('balloonLayer');
+  const colors = [
+    'radial-gradient(ellipse at 30% 30%, #fff0f5, #ffb6c1)',
+    'radial-gradient(ellipse at 30% 30%, #f3edff, #c8a2c8)',
+    'radial-gradient(ellipse at 30% 30%, #fff5e0, #ffd700)',
+    'radial-gradient(ellipse at 30% 30%, #e8f0ff, #87ceeb)',
+    'radial-gradient(ellipse at 30% 30%, #fff0f5, #ff9bb3)',
+  ];
+  for(let i=0;i<25;i++){
+    const b = document.createElement('div');
+    b.className = 'balloon';
+    b.style.background = colors[i % colors.length];
+    b.style.left = Math.random() * 100 + '%';
+    b.style.width = (30 + Math.random()*25) + 'px';
+    b.style.height = (40 + Math.random()*30) + 'px';
+    b.style.setProperty('--dur', (3.5 + Math.random()*3.5) + 's');
+    b.style.setProperty('--drift', ((Math.random()-0.5)*200) + 'px');
+    b.style.animationDelay = (Math.random()*1.5) + 's';
+    layer.appendChild(b);
+    setTimeout(() => b.classList.add('fly'), 50);
+    setTimeout(() => b.remove(), 9000);
+  }
+}
+
+/* ==================== 彩带 ==================== */
+function burstConfetti(){
+  const layer = document.getElementById('confettiLayer');
+  const colors = ['#FFB6C1','#E6B0FF','#FFD700','#87CEEB','#FF69B4','#DDA0DD','#FFA07A','#98FB98'];
+  for(let i=0;i<80;i++){
+    const p = document.createElement('div');
+    p.className = 'confetti-piece';
+    p.style.backgroundColor = colors[i % colors.length];
+    p.style.left = Math.random() * 100 + '%';
+    p.style.width = (6 + Math.random()*8) + 'px';
+    p.style.height = (10 + Math.random()*12) + 'px';
+    p.style.setProperty('--dur', (2.5 + Math.random()*2.5) + 's');
+    p.style.animationDelay = (Math.random()*0.8) + 's';
+    if(Math.random() > 0.5) p.style.borderRadius = '50%';
+    layer.appendChild(p);
+    setTimeout(() => p.classList.add('fall'), 50);
+    setTimeout(() => p.remove(), 6000);
+  }
+}
+
+/* ==================== 心形汇聚 ==================== */
+const heartStage = document.getElementById('heartStage');
+
+function getHeartPoint(t, scale){
+  const x = 16 * Math.pow(Math.sin(t), 3);
+  const y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+  return { x: x * scale, y: (y - 6) * scale };
+}
+
+function buildHeartPhotos(){
+  for(let i=0;i<NUM_PHOTOS;i++){
+    const photo = document.createElement('div');
+    photo.className = 'heart-photo';
+    photo.id = 'heartPhoto' + i;
+
+    // 随机起始位置
+    const startX = (Math.random()-0.5) * 600;
+    const startY = (Math.random()-0.5) * 500;
+    photo.style.transform = `translate(calc(-50% + ${startX}px), calc(-50% + ${startY}px)) scale(0.3) rotate(${(Math.random()-0.5)*60}deg)`;
+    photo.style.opacity = '0';
+
+    const img = document.createElement('img');
+    img.src = imageUrls[i];
+    img.alt = `回忆 ${i+1}`;
+    photo.appendChild(img);
+
+    heartStage.appendChild(photo);
+  }
+}
+buildHeartPhotos();
+
+function animateHeart(){
+  const photos = document.querySelectorAll('.heart-photo');
+  const scale = 14;
+
+  photos.forEach((photo, i) => {
+    setTimeout(() => {
+      const t = (i / NUM_PHOTOS) * Math.PI * 2;
+      const pt = getHeartPoint(t, scale);
+      const rotation = (Math.random()-0.5) * 18;
+      photo.style.opacity = '1';
+      photo.style.transform = `translate(calc(-50% + ${pt.x}px), calc(-50% + ${pt.y}px)) scale(0.7) rotate(${rotation}deg)`;
+    }, i * 100);
+  });
+
+  // 显示最终文字
+  setTimeout(() => {
+    document.getElementById('finaleMessage').classList.add('show');
+  }, NUM_PHOTOS * 100 + 1500);
+
+  // 心形微微跳动
+  setTimeout(() => {
+    photos.forEach((photo, i) => {
+      photo.style.transition = 'transform 2s ease-in-out, opacity 0.5s';
+    });
+    heartBeat(photos, scale);
+  }, NUM_PHOTOS * 100 + 3000);
+}
+
+function heartBeat(photos, scale){
+  let beat = false;
+  setInterval(() => {
+    beat = !beat;
+    photos.forEach((photo, i) => {
+      const t = (i / NUM_PHOTOS) * Math.PI * 2;
+      const pt = getHeartPoint(t, scale * (beat ? 1.05 : 1));
+      const rotation = (i / NUM_PHOTOS) * 60 - 30; // 整体倾斜
+      photo.style.transform = `translate(calc(-50% + ${pt.x}px), calc(-50% + ${pt.y}px)) scale(${beat ? 0.74 : 0.7}) rotate(${rotation}deg)`;
+    });
+  }, 1500);
+}
+
+</script><div class="float-particle" style="width: 5.27562px; height: 5.27562px; left: 75.1296%; bottom: -10px; animation-duration: 16.5456s; animation-delay: 6.12924s; --drift: -32.337202205678274px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 5.24021px; height: 5.24021px; left: 1.46301%; bottom: -10px; animation-duration: 16.1235s; animation-delay: 1.25457s; --drift: 48.400255454837534px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 4.62661px; height: 4.62661px; left: 38.9695%; bottom: -10px; animation-duration: 18.5188s; animation-delay: 3.04719s; --drift: 39.982428831633925px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 2.24232px; height: 2.24232px; left: 87.1084%; bottom: -10px; animation-duration: 22.5942s; animation-delay: 1.23025s; --drift: 47.268015093576054px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 2.35853px; height: 2.35853px; left: 68.2502%; bottom: -10px; animation-duration: 18.3815s; animation-delay: 5.91445s; --drift: -43.42266280635768px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 3.47316px; height: 3.47316px; left: 16.0771%; bottom: -10px; animation-duration: 21.5523s; animation-delay: 2.37522s; --drift: 45.23749398799323px; background: rgba(255, 215, 0, 0.3);"></div><div class="float-particle" style="width: 5.71582px; height: 5.71582px; left: 70.8672%; bottom: -10px; animation-duration: 15.4216s; animation-delay: 0.762951s; --drift: 48.463960882150374px; background: rgba(255, 215, 0, 0.3);"></div><div class="float-particle" style="width: 5.66863px; height: 5.66863px; left: 35.3348%; bottom: -10px; animation-duration: 23.162s; animation-delay: 9.30026s; --drift: -37.692307624384625px; background: rgba(255, 215, 0, 0.3);"></div><div class="float-particle" style="width: 3.67536px; height: 3.67536px; left: 5.65296%; bottom: -10px; animation-duration: 14.1906s; animation-delay: 8.94874s; --drift: 12.01870722404982px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 3.12096px; height: 3.12096px; left: 47.0207%; bottom: -10px; animation-duration: 18.9068s; animation-delay: 2.49026s; --drift: -24.740780544409226px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 3.58625px; height: 3.58625px; left: 68.3807%; bottom: -10px; animation-duration: 22.7989s; animation-delay: 7.24442s; --drift: -2.426837625563273px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 3.79002px; height: 3.79002px; left: 57.1641%; bottom: -10px; animation-duration: 21.7784s; animation-delay: 1.57351s; --drift: -20.803348163716397px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 3.36775px; height: 3.36775px; left: 54.4005%; bottom: -10px; animation-duration: 22.9431s; animation-delay: 2.58623s; --drift: -17.986276040614655px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 3.70031px; height: 3.70031px; left: 37.0018%; bottom: -10px; animation-duration: 19.095s; animation-delay: 2.83904s; --drift: 35.16302153316637px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 5.0021px; height: 5.0021px; left: 96.117%; bottom: -10px; animation-duration: 13.3426s; animation-delay: 6.49717s; --drift: -27.15719169318146px; background: rgba(255, 215, 0, 0.3);"></div><div class="float-particle" style="width: 3.96311px; height: 3.96311px; left: 53.9264%; bottom: -10px; animation-duration: 21.4157s; animation-delay: 1.5523s; --drift: -0.9184050928032974px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 2.0871px; height: 2.0871px; left: 76.6187%; bottom: -10px; animation-duration: 13.3015s; animation-delay: 4.08391s; --drift: -40.77353145498951px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 4.19343px; height: 4.19343px; left: 38.7712%; bottom: -10px; animation-duration: 13.2101s; animation-delay: 9.50453s; --drift: -25.70909281658802px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 2.55731px; height: 2.55731px; left: 78.3987%; bottom: -10px; animation-duration: 12.1431s; animation-delay: 6.83674s; --drift: -17.29947514237631px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 3.84296px; height: 3.84296px; left: 24.3439%; bottom: -10px; animation-duration: 23.8397s; animation-delay: 3.79345s; --drift: -7.3149338175093135px; background: rgba(255, 215, 0, 0.3);"></div><div class="float-particle" style="width: 2.17971px; height: 2.17971px; left: 72.8866%; bottom: -10px; animation-duration: 19.3783s; animation-delay: 0.492282s; --drift: 7.051792675584224px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 3.93898px; height: 3.93898px; left: 25.8557%; bottom: -10px; animation-duration: 11.9484s; animation-delay: 1.76561s; --drift: -2.6588266129334173px; background: rgba(255, 215, 0, 0.3);"></div><div class="float-particle" style="width: 4.88941px; height: 4.88941px; left: 63.3209%; bottom: -10px; animation-duration: 22.2934s; animation-delay: 1.47139s; --drift: -12.259702897919908px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 2.77175px; height: 2.77175px; left: 89.9319%; bottom: -10px; animation-duration: 11.6283s; animation-delay: 2.83068s; --drift: -27.35299569233838px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 2.18071px; height: 2.18071px; left: 52.7431%; bottom: -10px; animation-duration: 18.2027s; animation-delay: 4.54819s; --drift: -20.389500802248328px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 3.59845px; height: 3.59845px; left: 32.6376%; bottom: -10px; animation-duration: 11.8959s; animation-delay: 4.88114s; --drift: 16.88106020904567px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 3.54162px; height: 3.54162px; left: 9.06769%; bottom: -10px; animation-duration: 24.9048s; animation-delay: 7.88242s; --drift: 37.134479383116656px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 5.92488px; height: 5.92488px; left: 47.3994%; bottom: -10px; animation-duration: 12.7697s; animation-delay: 9.33518s; --drift: -49.75954586951069px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 4.18943px; height: 4.18943px; left: 17.1083%; bottom: -10px; animation-duration: 20.4197s; animation-delay: 8.68805s; --drift: -2.0598163354837666px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 4.71874px; height: 4.71874px; left: 34.9234%; bottom: -10px; animation-duration: 15.6134s; animation-delay: 4.2476s; --drift: -47.07505460595749px; background: rgba(255, 215, 0, 0.3);"></div><div class="float-particle" style="width: 5.69025px; height: 5.69025px; left: 1.96329%; bottom: -10px; animation-duration: 19.1102s; animation-delay: 5.94522s; --drift: -35.572681964814635px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 3.15079px; height: 3.15079px; left: 80.33%; bottom: -10px; animation-duration: 13.2573s; animation-delay: 2.40152s; --drift: 2.199501511609405px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 2.34079px; height: 2.34079px; left: 98.3867%; bottom: -10px; animation-duration: 16.6568s; animation-delay: 7.56731s; --drift: 44.28291625805588px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 3.32381px; height: 3.32381px; left: 45.4757%; bottom: -10px; animation-duration: 18.3461s; animation-delay: 7.20139s; --drift: 8.302195529431089px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 4.66005px; height: 4.66005px; left: 20.4338%; bottom: -10px; animation-duration: 15.4062s; animation-delay: 8.30102s; --drift: -2.8650529479795637px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 3.46888px; height: 3.46888px; left: 23.0915%; bottom: -10px; animation-duration: 21.6419s; animation-delay: 6.89862s; --drift: 1.1070723178442066px; background: rgba(255, 215, 0, 0.3);"></div><div class="float-particle" style="width: 2.15766px; height: 2.15766px; left: 71.9355%; bottom: -10px; animation-duration: 13.7698s; animation-delay: 1.78564s; --drift: 34.16258965518165px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 5.34699px; height: 5.34699px; left: 73.7932%; bottom: -10px; animation-duration: 19.1929s; animation-delay: 8.02476s; --drift: 12.348768771215191px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 5.67812px; height: 5.67812px; left: 19.5448%; bottom: -10px; animation-duration: 17.6322s; animation-delay: 5.88666s; --drift: 41.005492026115576px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 3.34625px; height: 3.34625px; left: 67.1629%; bottom: -10px; animation-duration: 12.3823s; animation-delay: 9.78392s; --drift: -28.82577306965306px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 5.29816px; height: 5.29816px; left: 89.0676%; bottom: -10px; animation-duration: 22.6877s; animation-delay: 7.54864s; --drift: -45.0262655947406px; background: rgba(255, 215, 0, 0.3);"></div><div class="float-particle" style="width: 2.73426px; height: 2.73426px; left: 99.4185%; bottom: -10px; animation-duration: 19.66s; animation-delay: 9.97484s; --drift: -21.8523970090285px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 4.83702px; height: 4.83702px; left: 79.0343%; bottom: -10px; animation-duration: 10.0485s; animation-delay: 8.85826s; --drift: 36.495557403277616px; background: rgba(255, 215, 0, 0.3);"></div><div class="float-particle" style="width: 3.42139px; height: 3.42139px; left: 93.8772%; bottom: -10px; animation-duration: 16.3051s; animation-delay: 7.31503s; --drift: 14.605158089308219px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 3.48289px; height: 3.48289px; left: 10.9978%; bottom: -10px; animation-duration: 23.0993s; animation-delay: 0.65188s; --drift: 43.99126861791642px; background: rgba(255, 215, 0, 0.3);"></div><div class="float-particle" style="width: 2.54141px; height: 2.54141px; left: 12.5058%; bottom: -10px; animation-duration: 19.2749s; animation-delay: 0.511877s; --drift: -40.186267611053324px; background: rgba(255, 215, 0, 0.3);"></div><div class="float-particle" style="width: 3.20873px; height: 3.20873px; left: 57.8262%; bottom: -10px; animation-duration: 23.3932s; animation-delay: 8.00576s; --drift: 38.44325291195686px; background: rgba(255, 215, 0, 0.3);"></div><div class="float-particle" style="width: 3.80491px; height: 3.80491px; left: 86.4988%; bottom: -10px; animation-duration: 15.2936s; animation-delay: 8.24355s; --drift: 40.09892269831214px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 2.09446px; height: 2.09446px; left: 66.3152%; bottom: -10px; animation-duration: 22.4579s; animation-delay: 9.61433s; --drift: 23.450596570506647px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 3.51831px; height: 3.51831px; left: 35.067%; bottom: -10px; animation-duration: 13.5006s; animation-delay: 5.80805s; --drift: -27.99442302124875px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 3.37781px; height: 3.37781px; left: 99.7874%; bottom: -10px; animation-duration: 21.7081s; animation-delay: 8.26147s; --drift: -37.210140187604345px; background: rgba(255, 215, 0, 0.3);"></div><div class="float-particle" style="width: 2.69547px; height: 2.69547px; left: 64.0696%; bottom: -10px; animation-duration: 16.4655s; animation-delay: 3.00417s; --drift: -3.3734400790897325px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 3.07286px; height: 3.07286px; left: 62.8576%; bottom: -10px; animation-duration: 19.0711s; animation-delay: 9.46675s; --drift: -23.574731723194553px; background: rgba(255, 215, 0, 0.3);"></div><div class="float-particle" style="width: 4.68868px; height: 4.68868px; left: 48.6845%; bottom: -10px; animation-duration: 18.0517s; animation-delay: 3.89775s; --drift: -30.602444939313944px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 3.97582px; height: 3.97582px; left: 41.5146%; bottom: -10px; animation-duration: 22.3787s; animation-delay: 2.76368s; --drift: -3.318835701103218px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 5.13207px; height: 5.13207px; left: 98.5802%; bottom: -10px; animation-duration: 18.1028s; animation-delay: 7.52782s; --drift: 8.317695544393814px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 5.95893px; height: 5.95893px; left: 49.3487%; bottom: -10px; animation-duration: 10.7605s; animation-delay: 9.92766s; --drift: -26.436998762550857px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 5.05927px; height: 5.05927px; left: 5.43177%; bottom: -10px; animation-duration: 13.8894s; animation-delay: 6.3674s; --drift: 6.076865593651718px; background: rgba(255, 182, 193, 0.4);"></div><div class="float-particle" style="width: 2.79209px; height: 2.79209px; left: 23.2218%; bottom: -10px; animation-duration: 19.7021s; animation-delay: 4.29039s; --drift: -22.42198517308822px; background: rgba(200, 162, 200, 0.4);"></div><div class="float-particle" style="width: 3.7949px; height: 3.7949px; left: 29.5733%; bottom: -10px; animation-duration: 21.8346s; animation-delay: 6.67712s; --drift: 11.714219996096574px; background: rgba(255, 182, 193, 0.4);"></div>
+
+
+
+
+
+</body></html>

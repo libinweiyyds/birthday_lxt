@@ -1,0 +1,137 @@
+/* ==================== 场景3：互动 ==================== */
+#interactive{text-align:center}
+.cake-area{
+  position:relative;width:220px;height:300px;margin:0 auto;
+  cursor:pointer;
+  animation:cakeAppear 1.5s ease forwards;
+}
+@keyframes cakeAppear{from{opacity:0;transform:scale(0.5)}to{opacity:1;transform:scale(1)}}
+
+.cake-plate{
+  position:absolute;bottom:0;left:-15px;width:250px;height:22px;
+  background:linear-gradient(180deg,#f5e6f0,#d4b8d8);
+  border-radius:50%;box-shadow:0 8px 20px rgba(0,0,0,0.2);
+}
+.cake-plate::after{
+  content:'';position:absolute;top:2px;left:5px;width:240px;height:8px;
+  background:linear-gradient(180deg,rgba(255,255,255,0.4),transparent);
+  border-radius:50%;
+}
+
+.cake-layer{position:absolute;left:50%;transform:translateX(-50%);border-radius:8px 8px 4px 4px}
+.cake-bottom{bottom:18px;width:210px;height:85px;
+  background:linear-gradient(180deg,#ffc0cb 0%,#ff9bb3 60%,#e8849c 100%);
+}
+.cake-bottom::before{
+  content:'';position:absolute;top:-4px;left:0;width:100%;height:12px;
+  background:radial-gradient(ellipse 15px 8px at 20% 50%,#fff5f8 0%,transparent 0%),
+             radial-gradient(ellipse 15px 8px at 50% 50%,#fff5f8 0%,transparent 0%),
+             radial-gradient(ellipse 15px 8px at 80% 50%,#fff5f8 0%,transparent 0%);
+}
+.cake-bottom::after{
+  content:'';position:absolute;top:10px;left:0;width:100%;height:100%;
+  background:repeating-linear-gradient(90deg,transparent 0,transparent 20px,rgba(255,255,255,0.1) 20px,rgba(255,255,255,0.1) 40px);
+}
+
+.cake-middle{bottom:100px;width:170px;height:70px;
+  background:linear-gradient(180deg,#d8b0e8 0%,#c8a2c8 60%,#b88cb0 100%);
+}
+
+.cake-top{bottom:165px;width:130px;height:55px;
+  background:linear-gradient(180deg,#ffd1dc 0%,#ffb6c1 60%,#f596aa 100%);
+}
+
+/* 装饰奶油点 */
+.cake-dots{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+.cake-dot{position:absolute;width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.6)}
+
+/* 蜡烛 */
+.candle-row{position:absolute;bottom:215px;left:50%;transform:translateX(-50%);display:flex;gap:20px}
+.candle{position:relative;width:7px;height:35px;border-radius:2px;
+  background:linear-gradient(180deg,#fff5f8 0%,#ffd1dc 50%,#ffb6c1 100%);
+}
+.candle::before{content:'';position:absolute;top:-2px;left:50%;transform:translateX(-50%);width:2px;height:4px;background:#8b6914}
+.flame{
+  position:absolute;top:-18px;left:50%;transform:translateX(-50%);
+  width:12px;height:20px;
+  background:radial-gradient(ellipse at 50% 80%,#fff5d0 0%,#ffcc00 30%,#ff8800 60%,transparent 80%);
+  border-radius:50% 50% 50% 50%/60% 60% 40% 40%;
+  box-shadow:0 0 15px #ff9500,0 0 30px rgba(255,140,0,0.5);
+  animation:flicker 0.15s infinite alternate;
+}
+@keyframes flicker{
+  0%{transform:translateX(-50%) scale(1,1) rotate(-2deg)}
+  100%{transform:translateX(-50%) scale(1.08,1.12) rotate(2deg)}
+}
+.flame.out{animation:blowOut 0.6s forwards}
+@keyframes blowOut{
+  0%{opacity:1;transform:translateX(-50%) scale(1)}
+  30%{opacity:0.7;transform:translateX(-50%) scale(0.6,0.3) translateY(15px)}
+  100%{opacity:0;transform:translateX(-50%) scale(0.2,0.1) translateY(40px)}
+}
+
+/* 烟雾 */
+.smoke{position:absolute;top:-15px;left:50%;transform:translateX(-50%);
+  width:8px;height:8px;border-radius:50%;background:rgba(200,200,200,0.3);
+  opacity:0;
+}
+.smoke.active{animation:smokeRise 2s ease-out forwards}
+@keyframes smokeRise{
+  0%{opacity:0.4;transform:translateX(-50%) translateY(0) scale(0.5)}
+  100%{opacity:0;transform:translateX(-50%) translateY(-60px) scale(2)}
+}
+
+.interactive-hint{
+  margin-top:2rem;font-family:'Long Cang',cursive;font-size:1.6rem;
+  color:var(--pink-100);text-shadow:var(--text-glow);letter-spacing:0.15em;
+  animation:hintFloat 3s ease-in-out infinite;
+}
+@keyframes hintFloat{0%,100%{transform:translateY(0);opacity:0.7}50%{transform:translateY(-5px);opacity:1}}
+
+.wish-text{
+  position:absolute;top:35%;left:50%;transform:translate(-50%,-50%);
+  font-family:'Ma Shan Zheng',cursive;font-size:2rem;
+  color:var(--gold-soft);text-shadow:0 0 30px rgba(255,215,0,0.4);
+  opacity:0;pointer-events:none;letter-spacing:0.2em;
+}
+.wish-text.show{animation:wishFloat 3.5s ease-out forwards}
+@keyframes wishFloat{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(0.5)}
+  20%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  80%{opacity:1;transform:translate(-50%,-80%) scale(1)}
+  100%{opacity:0;transform:translate(-50%,-120%) scale(1.1)}
+}
+
+/* 气球 */
+.balloon-layer{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:15;overflow:hidden}
+.balloon{
+  position:absolute;bottom:-80px;width:40px;height:50px;
+  border-radius:50% 50% 50% 50%/55% 55% 45% 45%;
+  opacity:0;
+}
+.balloon::after{
+  content:'';position:absolute;bottom:-3px;left:50%;transform:translateX(-50%);
+  width:2px;height:8px;background:rgba(255,255,255,0.3);
+}
+.balloon::before{
+  content:'';position:absolute;bottom:-60px;left:50%;width:1px;height:60px;
+  background:linear-gradient(180deg,rgba(255,255,255,0.15),transparent);
+}
+.balloon.fly{animation:balloonFly var(--dur,4s) ease-out forwards}
+@keyframes balloonFly{
+  0%{bottom:-80px;opacity:0}
+  10%{opacity:0.9}
+  100%{bottom:110%;opacity:0.7;transform:translateX(var(--drift,0))}
+}
+
+/* 彩带 */
+.confetti-layer{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:16;overflow:hidden}
+.confetti-piece{
+  position:absolute;top:-20px;width:10px;height:16px;
+  opacity:0;
+}
+.confetti-piece.fall{animation:confettiFall var(--dur,3s) linear forwards}
+@keyframes confettiFall{
+  0%{top:-20px;opacity:1;transform:rotate(0deg) rotateY(0deg)}
+  100%{top:105%;opacity:0.5;transform:rotate(720deg) rotateY(360deg)}
+}
