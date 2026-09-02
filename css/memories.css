@@ -56,14 +56,13 @@
   min-height:0;
 }
 
-/* 左侧黑胶唱片区：垂直居中 */
+/* 左侧黑胶唱片区：垂直居中（放大后占视觉 1/3） */
 .vinyl-area{
   position:relative;
   z-index:20;
   flex:0 0 auto;
-  width:30%;
-  max-width:280px;
-  min-width:200px;
+  width:490px;
+  max-width:490px;
   align-self:center;
   display:flex;
   align-items:center;
@@ -73,11 +72,11 @@
 
 .vinyl-record{
   position:relative;
-  width:200px;
-  height:200px;
+  width:450px;
+  height:450px;
   border-radius:50%;
   background:radial-gradient(circle,#1a1a1a 0%,#0a0a0a 70%,#000 100%);
-  box-shadow:0 0 40px rgba(255,182,193,0.25),0 0 20px rgba(0,0,0,0.6);
+  box-shadow:0 0 72px rgba(255,182,193,0.35),0 0 30px rgba(0,0,0,0.75);
   animation:diskRotate 4s linear infinite;
   flex-shrink:0;
 }
@@ -90,73 +89,80 @@
 }
 .vinyl-record::after{
   content:'';position:absolute;top:50%;left:50%;
-  width:110px;height:110px;border-radius:50%;
+  width:248px;height:248px;border-radius:50%;
   background:radial-gradient(circle,#000 0%,#000 50%,transparent 51%);
   transform:translate(-50%,-50%);
   box-shadow:0 0 0 1px rgba(255,182,193,0.1);
 }
 
+/* 唱片中心圆图：相对外层反向旋转,内部图片切换不影响外层动画 */
 .vinyl-center-image{
   position:absolute;top:50%;left:50%;
-  width:60%;height:60%;
+  width:65%;height:65%;
   border-radius:50%;
   transform:translate(-50%,-50%);
   overflow:hidden;
   box-shadow:0 0 0 2px rgba(255,182,193,0.4),0 4px 20px rgba(0,0,0,0.5);
   z-index:2;
+  animation:diskAntiRotate 4s linear infinite;
 }
+@keyframes diskAntiRotate{from{transform:translate(-50%,-50%) rotate(0)}to{transform:translate(-50%,-50%) rotate(-360deg)}}
 .vinyl-center-image img{
-  width:100%;height:100%;object-fit:cover;display:block;
+  width:100%;height:100%;
+  object-fit:cover;
+  object-position:center top; /* 兼容聊天长截图,优先展示上半部分 */
+  display:block;
   border-radius:50%;
-  transition:opacity 0.5s ease-in-out,transform 0.5s ease-in-out;
+  transition:opacity 0.5s ease-in-out;
 }
+/* 中心轴点 */
 .vinyl-center-image::after{
   content:'';position:absolute;top:50%;left:50%;
-  width:12px;height:12px;border-radius:50%;
+  width:14px;height:14px;border-radius:50%;
   background:radial-gradient(circle,#222 0%,#000 100%);
   transform:translate(-50%,-50%);
-  box-shadow:0 0 0 1px rgba(255,255,255,0.1);
+  box-shadow:0 0 0 1px rgba(255,255,255,0.15);
   z-index:3;
 }
 
 .vinyl-arm{
-  position:absolute;width:120px;height:120px;
-  top:0;right:-10px;
-  transform-origin:30px 30px;
+  position:absolute;width:180px;height:180px;
+  top:-10px;right:-20px;
+  transform-origin:45px 45px;
   z-index:21;pointer-events:none;
   opacity:0;animation:memFade 1.5s ease 1.2s forwards;
 }
 .vinyl-arm-body{
-  position:absolute;width:7px;height:120px;
+  position:absolute;width:10px;height:180px;
   background:linear-gradient(180deg,#d4d4d4,#8a8a8a 50%,#5a5a5a);
-  border-radius:4px;
-  top:30px;left:30px;
+  border-radius:6px;
+  top:45px;left:45px;
   transform-origin:50% 0;
-  box-shadow:0 2px 8px rgba(0,0,0,0.3);
+  box-shadow:0 2px 10px rgba(0,0,0,0.35);
 }
 .vinyl-arm-pivot{
-  position:absolute;top:18px;left:18px;
-  width:22px;height:22px;border-radius:50%;
+  position:absolute;top:27px;left:27px;
+  width:32px;height:32px;border-radius:50%;
   background:radial-gradient(circle,#aaa 0%,#666 60%,#444 100%);
-  box-shadow:0 2px 6px rgba(0,0,0,0.4);
+  box-shadow:0 2px 8px rgba(0,0,0,0.45);
 }
 .vinyl-arm-head{
-  position:absolute;bottom:0;left:18px;
-  width:28px;height:42px;
+  position:absolute;bottom:0;left:27px;
+  width:41px;height:61px;
   background:linear-gradient(180deg,#3a3a3a,#1a1a1a);
-  border-radius:4px;
-  box-shadow:0 2px 6px rgba(0,0,0,0.4);
+  border-radius:6px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.45);
 }
 
 .vinyl-shadow{
-  position:absolute;bottom:-18px;left:50%;
-  width:160px;height:18px;border-radius:50%;
-  background:radial-gradient(ellipse,rgba(0,0,0,0.4) 0%,transparent 70%);
+  position:absolute;bottom:-25px;left:50%;
+  width:234px;height:22px;border-radius:50%;
+  background:radial-gradient(ellipse,rgba(0,0,0,0.45) 0%,transparent 70%);
   transform:translateX(-50%);
   pointer-events:none;
 }
 
-/* 右侧轮播区 */
+/* 右侧轮播区:加 3D 透视营造景深 */
 .carousel-area{
   position:relative;
   flex:1;
@@ -165,12 +171,15 @@
   align-items:center;
   justify-content:center;
   min-width:0;
+  perspective:1200px;
+  perspective-origin:50% 50%;
   opacity:0;animation:memFade 1.5s ease 1s forwards;
 }
 .memory-cards-stack{
   position:relative;
   width:100%;
   height:100%;
+  transform-style:preserve-3d;
 }
 
 /* 五张卡片：绝对定位，全部基于右区中心通过 transform 偏移 */
@@ -185,51 +194,103 @@
   overflow:hidden;
   opacity:0;
   transform:translate(-50%,-50%) translateX(0) scale(0.5);
-  transition:opacity 0.7s cubic-bezier(0.4,0,0.2,1),transform 0.7s cubic-bezier(0.34,1.56,0.64,1);
+  transition:all 0.5s ease-in-out;
   pointer-events:none;
-  will-change:transform,opacity;
+  will-change:transform,opacity,filter;
 }
-.memory-card img{width:100%;height:100%;object-fit:cover;display:block}
+/* 卡片容器需要图片 fill:让 img 绝对定位以便 kenburns 在内部 transform */
+.memory-card .img-box{
+  position:absolute;inset:0;
+  overflow:hidden;
+  border-radius:18px;
+}
+.memory-card .img-box img{
+  position:absolute;left:50%;top:50%;
+  width:100%;height:100%;
+  object-fit:cover;
+  object-position:center top; /* 兼容聊天长截图,优先展示上半部分 */
+  transform:translate(-50%,-50%) scale(1);
+  display:block;
+  transition:transform 8s ease-in-out;
+}
 .memory-card .caption{
   position:absolute;bottom:0;left:0;width:100%;
-  padding:12px 10px 10px;
-  background:linear-gradient(180deg,transparent,rgba(45,27,46,0.75));
-  color:#fff;font-size:12px;text-align:center;
+  padding:14px 10px 12px;
+  background:linear-gradient(180deg,transparent,rgba(45,27,46,0.78));
+  color:#fff;font-size:13px;text-align:center;
   font-family:'Long Cang',cursive;letter-spacing:0.1em;
   pointer-events:none;
+  transform:translateY(8px);opacity:0;
+  transition:opacity 0.6s ease 0.15s,transform 0.6s ease 0.15s;
+  text-shadow:0 2px 6px rgba(0,0,0,0.6);
 }
 
-/* 中间主卡 */
+/* 中间主卡：向右侧偏移 50px,避免被 450px 大唱盘完全遮挡 */
 .memory-card.active{
   opacity:1;
-  transform:translate(-50%,-50%) translateX(0) scale(1);
   width:300px;height:400px;
+  transform:translate(-50%,-50%) translateX(50px) scale(1);
   z-index:10;
   pointer-events:auto;
+  filter:none;
+  box-shadow:0 12px 40px rgba(0,0,0,0.2);
 }
+.memory-card.active .img-box img{
+  animation:kenburns 8s ease-in-out infinite alternate;
+}
+.memory-card.active .caption{
+  transform:translateY(0);opacity:1;
+}
+/* 光晕扫过:在 active 卡片上 */
+.memory-card.active::after{
+  content:'';
+  position:absolute;inset:0;
+  border-radius:20px;
+  background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,0.45) 50%,transparent 65%);
+  transform:translateX(-110%);
+  animation:shineSweep 6s ease-in-out infinite;
+  pointer-events:none;
+  z-index:5;
+  mix-blend-mode:screen;
+}
+@keyframes kenburns{
+  0%   {transform:translate(-50%,-50%) scale(1)}
+  100% {transform:translate(-50%,calc(-50% - 8px)) scale(1.12)}
+}
+@keyframes shineSweep{
+  0%,12%   {transform:translateX(-110%)}
+  35%,100% {transform:translateX(110%)}
+}
+
+/* 左侧第一张：拉近距离,角度变平缓 */
 .memory-card.prev1{
-  opacity:0.7;
-  transform:translate(-50%,-50%) translateX(-160px) scale(0.85);
+  opacity:0.75;
   width:240px;height:340px;
+  transform:translate(-50%,-50%) translateX(-150px) translateY(-70px) scale(0.85) rotate(14deg);
   z-index:8;
+  filter:blur(1.5px) brightness(0.92);
 }
 .memory-card.next1{
-  opacity:0.7;
-  transform:translate(-50%,-50%) translateX(160px) scale(0.85);
+  opacity:0.75;
   width:240px;height:340px;
+  transform:translate(-50%,-50%) translateX(150px) translateY(-70px) scale(0.85) rotate(-14deg);
   z-index:8;
+  filter:blur(1.5px) brightness(0.92);
 }
+/* 左侧第二张:进一步收拢 */
 .memory-card.prev2{
-  opacity:0.35;
-  transform:translate(-50%,-50%) translateX(-280px) scale(0.7);
+  opacity:0.45;
   width:200px;height:300px;
+  transform:translate(-50%,-50%) translateX(-260px) translateY(-150px) scale(0.72) rotate(22deg);
   z-index:7;
+  filter:blur(3px) brightness(0.85);
 }
 .memory-card.next2{
-  opacity:0.35;
-  transform:translate(-50%,-50%) translateX(280px) scale(0.7);
+  opacity:0.45;
   width:200px;height:300px;
+  transform:translate(-50%,-50%) translateX(260px) translateY(-150px) scale(0.72) rotate(-22deg);
   z-index:7;
+  filter:blur(3px) brightness(0.85);
 }
 
 .memory-left-zone,.memory-right-zone{
@@ -336,3 +397,108 @@
   font-size:0.8rem;color:rgba(255,240,245,0.5);letter-spacing:0.1em;
 }
 /* 旧版 skip-btn 已被 S1 内嵌版本覆盖（顶部无边框透明） */
+
+/* ==================== 平板适配 (769-1080px) ==================== */
+@media (max-width: 1080px){
+  .s1-scene{
+    padding:0 1.5rem;
+  }
+  .vinyl-area{
+    width:auto;
+    min-width:400px;
+    flex:0 0 auto;
+  }
+  .vinyl-record{
+    width:360px;height:360px;
+  }
+  .vinyl-record::after{
+    width:200px;height:200px;
+  }
+  .vinyl-shadow{
+    width:190px;
+  }
+  .vinyl-arm{
+    width:144px;height:144px;
+    right:-14px;
+  }
+  .vinyl-arm-body{
+    width:9px;height:144px;
+    top:36px;left:36px;
+  }
+  .vinyl-arm-pivot{
+    top:21px;left:21px;
+    width:26px;height:26px;
+  }
+  .vinyl-arm-head{
+    left:21px;
+    width:34px;height:50px;
+  }
+}
+
+/* ==================== 手机适配 (≤768px) ==================== */
+@media (max-width: 768px){
+  .s1-scene{
+    flex-direction:column;
+    padding:0 1rem;
+    justify-content:center;
+    gap:1rem;
+  }
+  .vinyl-area{
+    /* 在 column 布局中,vinyl-area 是 row 排版主轴方向,flex:0 0 auto 让其按内容自然撑开 */
+    flex:0 0 auto;
+    align-self:center;
+  }
+  .vinyl-record{
+    margin:0 auto; /* 防止 vinyl-area 因 flex 自动对齐导致的偏移 */
+    width:220px;height:220px;
+  }
+  .vinyl-record::after{
+    width:120px;height:120px;
+  }
+  .vinyl-shadow{
+    width:130px;
+  }
+  .vinyl-arm{
+    width:90px;height:90px;
+    top:0;right:-6px;
+    transform-origin:22px 22px;
+  }
+  .vinyl-arm-body{
+    width:7px;height:90px;
+    top:22px;left:22px;
+  }
+  .vinyl-arm-pivot{
+    top:14px;left:14px;
+    width:18px;height:18px;
+  }
+  .vinyl-arm-head{
+    left:14px;
+    width:24px;height:36px;
+  }
+  .carousel-area{
+    flex:1;
+    width:100%;
+  }
+  /* 移动端卡片缩小,扇形偏移按比例收敛 */
+  .memory-card.active{width:200px;height:280px;transform:translate(-50%,-50%) translateX(30px) scale(1)}
+  .memory-card.prev1{
+    width:160px;height:230px;
+    transform:translate(-50%,-50%) translateX(-90px) translateY(-45px) scale(0.85) rotate(12deg);
+    filter:blur(1.5px) brightness(0.92);
+  }
+  .memory-card.next1{
+    width:160px;height:230px;
+    transform:translate(-50%,-50%) translateX(90px) translateY(-45px) scale(0.85) rotate(-12deg);
+    filter:blur(1.5px) brightness(0.92);
+  }
+  .memory-card.prev2{
+    width:130px;height:200px;
+    transform:translate(-50%,-50%) translateX(-130px) translateY(-75px) scale(0.72) rotate(16deg);
+    filter:blur(3px) brightness(0.85);
+  }
+  .memory-card.next2{
+    width:130px;height:200px;
+    transform:translate(-50%,-50%) translateX(130px) translateY(-75px) scale(0.72) rotate(-16deg);
+    filter:blur(3px) brightness(0.85);
+  }
+}

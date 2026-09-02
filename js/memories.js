@@ -23,15 +23,22 @@ function buildMemoryCards(){
     const card = document.createElement('div');
     card.className = 'memory-card';
     card.dataset.index = i;
+
+    const imgBox = document.createElement('div');
+    imgBox.className = 'img-box';
+
     const img = document.createElement('img');
     img.src = imageUrls[i];
     img.alt = `回忆 ${i+1}`;
     img.loading = 'lazy';
     applyImgFallback(img);
+
     const caption = document.createElement('div');
     caption.className = 'caption';
     caption.textContent = memoryCaptions[i] || ('回忆 · ' + (i+1));
-    card.appendChild(img);
+
+    imgBox.appendChild(img);
+    card.appendChild(imgBox);
     card.appendChild(caption);
     memoryCarousel.appendChild(card);
   }
@@ -114,12 +121,11 @@ function swapVinylImage(){
   } while(forbid.has(randomIdx) && attempts < 50);
   if(forbid.has(randomIdx)) return;
   currentVinylIdx = randomIdx;
+  // 仅改 opacity,不修改 transform,避免覆盖 .vinyl-center-image 的反向旋转动画
   diskCoverImg.style.opacity = '0';
-  diskCoverImg.style.transform = 'scale(0.92)';
   setTimeout(() => {
     diskCoverImg.src = imageUrls[randomIdx];
     diskCoverImg.style.opacity = '1';
-    diskCoverImg.style.transform = 'scale(1)';
   }, 350);
 }
 
@@ -130,6 +136,11 @@ function startVinylSwap(){
     while(forbid.has(idx)) idx = Math.floor(Math.random() * NUM_PHOTOS);
     currentVinylIdx = idx;
     diskCoverImg.src = imageUrls[idx];
+    // 初始显示用 fade-in
+    diskCoverImg.style.opacity = '0';
+    requestAnimationFrame(() => {
+      diskCoverImg.style.opacity = '1';
+    });
   }
   if(vinylSwapTimer) clearInterval(vinylSwapTimer);
   vinylSwapTimer = setInterval(swapVinylImage, 2000);
