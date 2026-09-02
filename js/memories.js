@@ -70,10 +70,6 @@
       scale:1,
       blur:0, opacity:0,
       brightness:1, saturate:1,
-      // 浮动相位(独立 → 不同步)
-      bob:{ amp:4, freq:0.18, phase:Math.random()*Math.PI*2 },
-      drift:{ amp:3, freq:0.13, phase:Math.random()*Math.PI*2 },
-      spin:{ amp:0.8, freq:0.07, phase:Math.random()*Math.PI*2 },
       // 上次触发图片切换的时间(避免每帧重设 src)
       lastSrcAt:0,
     };
@@ -111,15 +107,239 @@
     c.cap.textContent = cap;
   }
 
+  /* ===================== 12 种 Motion Language ====================
+     每个 motionFn 是纯函数,接收 (camTime, slotIdx, slot) 返回
+     { dx, dy, dz, dRotX, dRotY, dRotZ, dScale, dBrightness, dBlur, dOpacity } 的偏移。
+     这些偏移叠加在 slot 目标位置之上,与 slot 自身的 transition lerp 共同作用,
+     产生持续运动 + 切换时连续 morph 的效果。
+
+     规则:相邻两个 Style 必须分配不同的 motion,避免"重复感"。
+  */
+  const ZERO_MOTION = { dx:0, dy:0, dz:0, dRotX:0, dRotY:0, dRotZ:0, dScale:0, dBrightness:0, dBlur:0, dOpacity:0 };
+
+  const MOTIONS = {
+    /* 01 FLOAT — 安静漂浮 */
+    FLOAT:{
+      name:'FLOAT',
+      evaluate(t, i, slot){
+        const p = i * 1.37;
+        return {
+          dx:0,
+          dy: Math.sin(t * 0.7 + p) * 6 + Math.sin(t * 0.31 + p*2.1) * 2.5,
+          dz:0,
+          dRotX: Math.sin(t * 0.41 + p) * 0.6,
+          dRotY: Math.cos(t * 0.37 + p*1.3) * 0.8,
+          dRotZ: Math.sin(t * 0.23 + p*0.7) * 1.2,
+          dScale: Math.sin(t * 0.5 + p) * 0.012,
+          dBrightness:0, dBlur:0, dOpacity:0,
+        };
+      }
+    },
+    /* 02 CAMERA_PUSH — 镜头推进(配合 cameraRig scale 拉远) */
+    CAMERA_PUSH:{
+      name:'CAMERA_PUSH',
+      evaluate(t, i, slot){
+        return {
+          dx:0, dy: Math.sin(t*0.5 + i*0.8) * 1.5, dz:0,
+          dRotX:0, dRotY:0, dRotZ: Math.sin(t*0.27 + i) * 0.25,
+          dScale:0, dBrightness: Math.sin(t*0.4) * 0.05, dBlur:0, dOpacity:0,
+        };
+      }
+    },
+    /* 03 ORBIT — 围绕主卡弧线运动 */
+    ORBIT:{
+      name:'ORBIT',
+      evaluate(t, i, slot){
+        if(i === 0) return ZERO_MOTION;
+        const phase = i * 1.91 + 0.5;
+        const speed = (i % 2 === 0 ? 1 : -1) * 0.18;
+        const radius = 8 + (i * 1.5);
+        return {
+          dx: Math.sin(t * speed + phase) * radius,
+          dy: Math.cos(t * speed + phase) * radius * 0.55,
+          dz: Math.sin(t * speed * 0.7 + phase) * 8,
+          dRotX:0, dRotY:0,
+          dRotZ: Math.sin(t * speed + phase) * 1.5,
+          dScale: Math.cos(t * speed * 0.5 + phase) * 0.015,
+          dBrightness:0, dBlur:0, dOpacity:0,
+        };
+      }
+    },
+    /* 04 CARD_FLIP — 主卡 rotateY 翻面 */
+    CARD_FLIP:{
+      name:'CARD_FLIP',
+      evaluate(t, i, slot){
+        if(i !== 0){
+          return { dx:0, dy: Math.sin(t*0.4 + i)*2, dz:0, dRotX:0, dRotY:0, dRotZ:0, dScale:0, dBrightness:0, dBlur:0, dOpacity:0 };
+        }
+        const flipT = (Math.sin(t * 0.35) + 1) / 2;
+        return {
+          dx:0, dy:0, dz:0,
+          dRotX:0,
+          dRotY: flipT * 180,
+          dRotZ:0,
+          dScale:0,
+          dBrightness: Math.sin(flipT * Math.PI) * 0.15,
+          dBlur:0, dOpacity:0,
+        };
+      }
+    },
+    /* 05 STACK_SHIFT — 一叠纸轻微摇晃 */
+    STACK_SHIFT:{
+      name:'STACK_SHIFT',
+      evaluate(t, i, slot){
+        const phase = i * 0.78;
+        return {
+          dx: Math.sin(t * 0.9 + phase) * 4 * (i / 9),
+          dy: Math.cos(t * 0.7 + phase) * 3 * (i / 9),
+          dz: Math.sin(t * 0.5 + phase) * 4,
+          dRotX:0, dRotY:0,
+          dRotZ: Math.sin(t * 0.6 + phase) * (0.6 + i * 0.15),
+          dScale:0, dBrightness:0, dBlur:0, dOpacity:0,
+        };
+      }
+    },
+    /* 06 SCATTER — 辐射状散开(主图保持稳定) */
+    SCATTER:{
+      name:'SCATTER',
+      evaluate(t, i, slot){
+        if(i === 0) return ZERO_MOTION;
+        const ang = (i / 9) * Math.PI * 2 + t * 0.05;
+        const breathe = (Math.sin(t * 0.6) + 1) / 2;
+        const radius = 8 + breathe * 18;
+        return {
+          dx: Math.cos(ang) * radius,
+          dy: Math.sin(ang) * radius * 0.6,
+          dz:0,
+          dRotX:0, dRotY:0,
+          dRotZ: Math.sin(ang * 2) * 2,
+          dScale: breathe * 0.03,
+          dBrightness: Math.sin(t * 0.3 + i) * 0.04,
+          dBlur:0, dOpacity:0,
+        };
+      }
+    },
+    /* 07 MAGNETIC_GATHER — 磁吸聚拢 */
+    MAGNETIC_GATHER:{
+      name:'MAGNETIC_GATHER',
+      evaluate(t, i, slot){
+        const breathe = (Math.sin(t * 0.5 + 1.5) + 1) / 2;
+        const radius = 18 - breathe * 16;
+        const ang = (i / 9) * Math.PI * 2 + t * 0.08;
+        return {
+          dx: Math.cos(ang) * radius,
+          dy: Math.sin(ang) * radius * 0.5,
+          dz: Math.sin(t * 0.4 + i) * 4,
+          dRotX:0, dRotY:0,
+          dRotZ: -Math.sin(ang * 2) * 1.5,
+          dScale: -breathe * 0.02,
+          dBrightness: breathe * 0.05,
+          dBlur:0, dOpacity:0,
+        };
+      }
+    },
+    /* 08 FILM_SCROLL — 横向滚动 */
+    FILM_SCROLL:{
+      name:'FILM_SCROLL',
+      evaluate(t, i, slot){
+        return {
+          dx: Math.sin(t * 0.3 + i * 0.4) * 3,
+          dy:0,
+          dz:0,
+          dRotX:0, dRotY:0,
+          dRotZ: Math.sin(t * 0.4 + i * 0.4) * 0.4,
+          dScale:0, dBrightness:0, dBlur:0, dOpacity:0,
+        };
+      }
+    },
+    /* 09 PARALLAX_DRIFT — 视差漂浮,远近不同速度 */
+    PARALLAX_DRIFT:{
+      name:'PARALLAX_DRIFT',
+      evaluate(t, i, slot){
+        const depth = 1 - clamp((slot.z + 200) / -300, 0, 1);
+        const speed = 0.15 + depth * 0.6;
+        return {
+          dx: Math.sin(t * speed + i * 1.2) * (3 + depth * 6),
+          dy: Math.cos(t * speed * 0.7 + i) * (2 + depth * 4),
+          dz: Math.sin(t * speed * 0.5 + i) * (1 + depth * 3),
+          dRotX: Math.sin(t * speed * 0.4 + i) * (0.5 + depth * 1.0),
+          dRotY: Math.cos(t * speed * 0.5 + i) * (0.5 + depth * 1.0),
+          dRotZ: Math.sin(t * speed * 0.3 + i) * (0.4 + depth * 0.8),
+          dScale:0, dBrightness:0, dBlur:0, dOpacity:0,
+        };
+      }
+    },
+    /* 10 BREATHING — 同步呼吸:scale + brightness + blur 一起起伏 */
+    BREATHING:{
+      name:'BREATHING',
+      evaluate(t, i, slot){
+        const breath = Math.sin(t * 0.6);
+        const phase = i * 0.4;
+        return {
+          dx:0, dy: Math.sin(t * 0.4 + phase) * 1.5, dz:0,
+          dRotX:0, dRotY:0, dRotZ: Math.sin(t * 0.3 + phase) * 0.5,
+          dScale: breath * 0.02,
+          dBrightness: breath * 0.08,
+          dBlur: Math.max(0, breath * 0.4),
+          dOpacity:0,
+        };
+      }
+    },
+    /* 11 DISINTEGRATE — 周期性 glitch 脉冲 */
+    DISINTEGRATE:{
+      name:'DISINTEGRATE',
+      evaluate(t, i, slot){
+        const pulseT = (t % 2.5) / 2.5;
+        if(pulseT > 0.7){
+          const k = (pulseT - 0.7) / 0.3;
+          const dir = i % 4;
+          return {
+            dx: (dir === 0 ? 1 : dir === 1 ? -1 : dir === 2 ? 1 : -1) * k * 14,
+            dy: (dir === 0 ? -1 : dir === 1 ? 1 : dir === 2 ? 1 : -1) * k * 10,
+            dz: k * 20,
+            dRotX: k * (dir - 1.5) * 4,
+            dRotY: k * (dir - 1.5) * 6,
+            dRotZ: k * (dir - 1.5) * 8,
+            dScale: k * 0.04,
+            dBrightness: k * 0.3,
+            dBlur: k * 1.2,
+            dOpacity: -k * 0.25,
+          };
+        }
+        return {
+          dx: Math.sin(t + i) * 0.5, dy:0, dz:0,
+          dRotX:0, dRotY:0, dRotZ:0, dScale:0, dBrightness:0, dBlur:0, dOpacity:0,
+        };
+      }
+    },
+    /* 12 RECONSTRUCT — 从各方向缓慢拼回 */
+    RECONSTRUCT:{
+      name:'RECONSTRUCT',
+      evaluate(t, i, slot){
+        const phase = i * 0.87;
+        const settle = (Math.sin(t * 0.35 + phase) + 1) / 2;
+        return {
+          dx: Math.cos(t * 0.2 + phase) * (5 - settle * 4),
+          dy: Math.sin(t * 0.2 + phase) * (4 - settle * 3),
+          dz: Math.sin(t * 0.15 + phase) * 4,
+          dRotX:0, dRotY:0,
+          dRotZ: Math.sin(t * 0.18 + phase) * 0.6,
+          dScale: settle * 0.015,
+          dBrightness: settle * 0.06,
+          dBlur: 0, dOpacity: 0,
+        };
+      }
+    },
+  };
+
   /* ===================== 8 个 Style 描述符 =====================
      每个描述符:
-       cssClass  卡片要加的 css 类
-       camera    {x, y, z, rotX, rotY, rotZ, scale} 摄影机状态
-       motion    {floatingAmp, rotationAmp, parallax} 浮动强度
-       slots     Array<{x,y,z,w,h,rotX,rotY,rotZ,scale,blur,opacity,brightness,saturate}>
-                 长度 = POOL_SIZE, 每个 slot 描述该卡片在当前 Style 下的"目标空间状态"
-                 坐标采用相对 carousel 中心 (%) 的百分比
-       transition 0~1,从上一个 Style 到当前 Style 的过渡速度
+       cssClass     卡片要加的 css 类
+       camera       {x, y, rotX, rotY, scale} 摄影机状态
+       motionName   引用 MOTIONS 中的某个 motion 名称
+       motionAmp    0~1,整体强度(用于 morph 时 lerp)
+       cameraAmp    0~1,摄影机抖动强度
+       slots        长度 = POOL_SIZE
   */
 
   /* slot 工厂:横向 5 张 + 远处 4 张(相对中心百分比) */
@@ -256,56 +476,56 @@
       name:'cinematic', cssClass:'style-cinematic', bodyClass:'style-cinematic',
       slots: makeCinematic(),
       camera:{ x:0, y:0, rotX:0, rotY:0, scale:1 },
-      motion:{ floatingAmp:1.0, rotationAmp:1.0, parallax:1.0, drift:1.0 },
+      motionName:'FLOAT', motionAmp:1.0, cameraAmp:1.0,
       glow:  1.0,
     },
     film: {
       name:'film', cssClass:'style-film', bodyClass:'style-film',
       slots: makeFilm(),
       camera:{ x:0, y:0, rotX:0, rotY:0, scale:1.02 },
-      motion:{ floatingAmp:0.15, rotationAmp:0.05, parallax:0.0, drift:0.4 }, // 胶片基本只横向移动
+      motionName:'CAMERA_PUSH', motionAmp:1.0, cameraAmp:0.0,
       glow:  0.4,
     },
     polaroid: {
       name:'polaroid', cssClass:'style-polaroid', bodyClass:'style-polaroid',
       slots: makePolaroid(),
       camera:{ x:0, y:-10, rotX:2, rotY:0, scale:1.0 },
-      motion:{ floatingAmp:0.6, rotationAmp:0.4, parallax:0.4, drift:0.7 },
+      motionName:'ORBIT', motionAmp:1.0, cameraAmp:0.5,
       glow:  0.5,
     },
     editorial: {
       name:'editorial', cssClass:'style-editorial', bodyClass:'style-editorial',
       slots: makeEditorial(),
       camera:{ x:0, y:0, rotX:0, rotY:0, scale:1.0 },
-      motion:{ floatingAmp:0.3, rotationAmp:0.05, parallax:0.2, drift:0.3 },
+      motionName:'CARD_FLIP', motionAmp:1.0, cameraAmp:0.3,
       glow:  0.6,
     },
     collage: {
       name:'collage', cssClass:'style-collage', bodyClass:'style-collage',
       slots: makeCollage(),
       camera:{ x:0, y:0, rotX:0, rotY:0, scale:1.0 },
-      motion:{ floatingAmp:0.4, rotationAmp:0.2, parallax:0.3, drift:0.4 },
+      motionName:'STACK_SHIFT', motionAmp:1.0, cameraAmp:0.4,
       glow:  0.7,
     },
     dream: {
       name:'dream', cssClass:'style-dream', bodyClass:'style-dream',
       slots: makeDream(),
       camera:{ x:0, y:0, rotX:0, rotY:0, scale:1.01 },
-      motion:{ floatingAmp:0.7, rotationAmp:0.5, parallax:0.5, drift:0.8 },
+      motionName:'SCATTER', motionAmp:1.0, cameraAmp:0.6,
       glow:  1.0,
     },
     glitch: {
       name:'glitch', cssClass:'style-glitch', bodyClass:'style-glitch',
       slots: makeGlitch(),
       camera:{ x:0, y:0, rotX:0, rotY:0, scale:1.0 },
-      motion:{ floatingAmp:0.6, rotationAmp:1.2, parallax:0.6, drift:1.4 },
+      motionName:'DISINTEGRATE', motionAmp:1.0, cameraAmp:0.6,
       glow:  0.85,
     },
     constellation: {
       name:'constellation', cssClass:'style-constellation', bodyClass:'style-constellation',
       slots: makeConstellation(),
       camera:{ x:0, y:0, rotX:0, rotY:0, scale:1.0 },
-      motion:{ floatingAmp:0.25, rotationAmp:0.15, parallax:0.4, drift:0.3 },
+      motionName:'RECONSTRUCT', motionAmp:1.0, cameraAmp:0.4,
       glow:  1.1,
     },
   };
@@ -455,12 +675,19 @@
       saturate: lerp(a.saturate, b.saturate, t),
     };
   }
-  function lerpMotion(a, b, t){
+  function lerpMotionOffset(a, b, t){
+    // 对 motionFn 输出做 lerp,morph 中间 = from + (to - from) * smoothstep(t)
     return {
-      floatingAmp: lerp(a.floatingAmp, b.floatingAmp, t),
-      rotationAmp: lerp(a.rotationAmp, b.rotationAmp, t),
-      parallax:    lerp(a.parallax, b.parallax, t),
-      drift:       lerp(a.drift, b.drift, t),
+      dx: lerp(a.dx, b.dx, t),
+      dy: lerp(a.dy, b.dy, t),
+      dz: lerp(a.dz, b.dz, t),
+      dRotX: lerp(a.dRotX, b.dRotX, t),
+      dRotY: lerp(a.dRotY, b.dRotY, t),
+      dRotZ: lerp(a.dRotZ, b.dRotZ, t),
+      dScale: lerp(a.dScale, b.dScale, t),
+      dBrightness: lerp(a.dBrightness, b.dBrightness, t),
+      dBlur: lerp(a.dBlur, b.dBlur, t),
+      dOpacity: lerp(a.dOpacity, b.dOpacity, t),
     };
   }
   function lerpCamera(a, b, t){
@@ -500,9 +727,8 @@
 
     /* 2) 摄影机 = fromStyle.camera lerp 到 toStyle.camera */
     const cam = lerpCamera(fromStyle.camera, toStyle.camera, morphT);
-    // 摄影机再叠加自身微浮动(per-style 强度)
     const camTime = now / 1000;
-    const camAmp = lerp(fromStyle.motion.parallax, toStyle.motion.parallax, morphT);
+    const camAmp  = lerp(fromStyle.cameraAmp, toStyle.cameraAmp, morphT);
     const camTargetX     = cam.x + (Math.sin(camTime * 0.07) + Math.sin(camTime*0.041+1.3)*0.6) * 6 * camAmp;
     const camTargetY     = cam.y + (Math.cos(camTime * 0.053 + 0.7) + Math.sin(camTime*0.029+2.1)*0.5) * 4 * camAmp;
     const camTargetRX    = cam.rotX + Math.sin(camTime * 0.045 + 0.4) * 0.4 * camAmp;
@@ -522,9 +748,14 @@
         ` scale(${camScale.toFixed(4)})`;
     }
 
-    /* 3) 浮动 motion 参数 */
-    const motion = lerpMotion(fromStyle.motion, toStyle.motion, morphT);
-    const glow   = lerp(fromStyle.glow, toStyle.glow, morphT);
+    /* 3) Motion Language:每个 Style 关联一个 motionFn,
+          从 motion 评估 from 和 to 的偏移,再做 lerp,
+          morph 中间态自然产生"语言混合" */
+    const fromMotion = MOTIONS[fromStyle.motionName] || MOTIONS.FLOAT;
+    const toMotion   = MOTIONS[toStyle.motionName]   || MOTIONS.FLOAT;
+    const amp = lerp(fromStyle.motionAmp || 1, toStyle.motionAmp || 1, morphT);
+
+    const glow = lerp(fromStyle.glow, toStyle.glow, morphT);
 
     /* 4) 每张卡片 */
     pool.forEach((c, i) => {
@@ -536,24 +767,26 @@
       // slot (x,y) 是 %,转像素(基于当前 carousel 实际尺寸)
       const px = pctToPx(slot);
 
-      // 浮动 offset
-      const bob  = cur.bob.amp  * motion.floatingAmp * Math.sin(camTime * cur.bob.freq * Math.PI*2 + cur.bob.phase);
-      const drf  = cur.drift.amp * motion.drift     * Math.cos(camTime * cur.drift.freq * Math.PI*2 + cur.drift.phase);
-      const spn  = cur.spin.amp  * motion.rotationAmp * Math.sin(camTime * cur.spin.freq * Math.PI*2 + cur.spin.phase);
+      // Motion Language 偏移:分别评估 from / to 后 lerp
+      const offA = fromMotion.evaluate(camTime, i, slot);
+      const offB = toMotion.evaluate(camTime, i, slot);
+      const off  = lerpMotionOffset(offA, offB, morphT);
+      // amp 控制整体强度,0 时完全静止(morph 边界态)
+      const m = amp;
 
-      const tx = px.x + drf;
-      const ty = px.y + bob;
-      const tz = slot.z;
-      const tScale = slot.scale;
-      const tRotX  = slot.rotX;
-      const tRotY  = slot.rotY;
-      const tRotZ  = slot.rotZ + spn;
-      const tBlur  = slot.blur;
-      const tOp    = slot.opacity;
-      const tBr    = slot.brightness;
-      const tSat   = slot.saturate;
-      const tW     = slot.w;
-      const tH     = slot.h;
+      const tx = px.x + off.dx * m;
+      const ty = px.y + off.dy * m;
+      const tz = slot.z + off.dz * m;
+      const tScale  = slot.scale   * (1 + off.dScale * m);
+      const tRotX   = slot.rotX    + off.dRotX * m;
+      const tRotY   = slot.rotY    + off.dRotY * m;
+      const tRotZ   = slot.rotZ    + off.dRotZ * m;
+      const tBlur   = Math.max(0, slot.blur + off.dBlur * m);
+      const tOp     = clamp(slot.opacity + off.dOpacity * m, 0, 1);
+      const tBr     = slot.brightness + off.dBrightness * m;
+      const tSat    = slot.saturate;
+      const tW      = slot.w;
+      const tH      = slot.h;
 
       // 每帧直接 lerp(由 motion / 切换速度决定速度)
       const lambda = 6.0;
@@ -579,12 +812,8 @@
         ` translate3d(${cur.x.toFixed(2)}px, ${cur.y.toFixed(2)}px, ${cur.z.toFixed(2)}px)` +
         ` rotateX(${cur.rotX.toFixed(3)}deg) rotateY(${cur.rotY.toFixed(3)}deg) rotateZ(${cur.rotZ.toFixed(3)}deg)` +
         ` scale(${cur.scale.toFixed(4)})`;
-      // 关键:卡片本体保持纯几何层(不写 filter),所有视觉滤镜都交给 img,
-      // 避免对卡片整体 filter 暴露矩形蒙层。
       c.el.style.opacity = cur.opacity.toFixed(3);
       c.el.style.zIndex = Math.round(1000 + cur.z);
-      // 把 blur / brightness / saturate 都通过 CSS 变量传给 img,
-      // 由各 style-X 的 .memory-card.style-X img 规则把 var(--img-blur) 拼到自己的 filter 里。
       const imgBlur = Math.min(cur.blur, 1.5);
       c.img.style.setProperty('--img-blur', `${imgBlur.toFixed(2)}px`);
       c.img.style.setProperty('--img-bright', cur.brightness.toFixed(3));
