@@ -57,7 +57,41 @@
       </div>
 
       <div class="carousel-area">
-        <div class="memory-cards-stack" id="memoryCarousel"></div>
+        <!-- 装饰层：每种 Style 一层,由 Style Engine 切 .active -->
+        <div class="style-decor film" id="decorFilm">
+          <div class="film-grain"></div>
+          <div class="light-leak"></div>
+          <div class="flicker"></div>
+        </div>
+        <div class="style-decor polaroid" id="decorPolaroid">
+          <div class="tape tape-1"></div>
+          <div class="tape tape-2"></div>
+          <div class="tape tape-3"></div>
+        </div>
+        <div class="style-decor editorial" id="decorEditorial">
+          <div class="ed-grid-h" style="top:20%"></div>
+          <div class="ed-grid-h" style="top:50%"></div>
+          <div class="ed-grid-h" style="top:80%"></div>
+          <div class="ed-grid-v" style="left:33%"></div>
+          <div class="ed-grid-v" style="left:66%"></div>
+        </div>
+        <div class="style-decor collage" id="decorCollage"></div>
+        <div class="style-decor dream" id="decorDream">
+          <div class="mist"></div>
+          <div class="mist" style="animation-delay:-7s;opacity:0.6"></div>
+        </div>
+        <div class="style-decor glitch" id="decorGlitch">
+          <div class="scanlines"></div>
+        </div>
+        <div class="style-decor constellation" id="decorConstellation">
+          <div class="stars"></div>
+          <div class="const-line"></div>
+          <div class="const-line b"></div>
+        </div>
+
+        <div class="camera-rig" id="cameraRig">
+          <div class="memory-cards-stack" id="memoryCarousel"></div>
+        </div>
         <div class="memory-left-zone" id="memoryLeftZone"></div>
         <div class="memory-right-zone" id="memoryRightZone"></div>
       </div>

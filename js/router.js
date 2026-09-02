@@ -28,6 +28,8 @@
       if(typeof window._memoriesTick === 'function'){
         window.musicBox.onTimeUpdate = window._memoriesTick;
       }
+      // 启动 3D 卡片空间 RAF
+      if(typeof window._memoriesStart === 'function') window._memoriesStart();
     }
     if(sceneId === 'interactive' && window.musicBox){
       // 进入互动:淡出"特别的人"→淡入"生日快乐"歌(无需歌词)
@@ -41,9 +43,13 @@
       });
       // 生日快乐歌循环播放(无歌词,场景停留期间背景循环)
       window.musicBox.onEnd = null;
+      // 停止 S1 的 RAF(避免在不可见场景空转)
+      if(typeof window._memoriesStop === 'function') window._memoriesStop();
     }
     if(sceneId === 'finale' && typeof window.animateHeart === 'function'){
       setTimeout(window.animateHeart, 800);
+      // 停止 S1 的 RAF
+      if(typeof window._memoriesStop === 'function') window._memoriesStop();
     }
   }
 
@@ -51,6 +57,8 @@
     if(sceneId === 'memories' && window.musicBox){
       // 离开回忆：卸载时间回调，避免更新已隐藏的 DOM
       window.musicBox.onTimeUpdate = null;
+      // 停止 RAF
+      if(typeof window._memoriesStop === 'function') window._memoriesStop();
     }
   }
 
