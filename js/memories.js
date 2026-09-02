@@ -107,23 +107,80 @@
     c.cap.textContent = cap;
   }
 
-  /* ===================== 12 种 Motion Language ====================
-     每个 motionFn 是纯函数,接收 (camTime, slotIdx, slot) 返回
-     { dx, dy, dz, dRotX, dRotY, dRotZ, dScale, dBrightness, dBlur, dOpacity } 的偏移。
-     这些偏移叠加在 slot 目标位置之上,与 slot 自身的 transition lerp 共同作用,
-     产生持续运动 + 切换时连续 morph 的效果。
+  /* ===================== 运动层级系统 ====================
+     任意时刻,每张卡片被分配到 4 个层级之一:
+       PRIMARY      当前 active card (slot 0)
+       SECONDARY    距离 active 最近的 2 张 (slot 1~2)
+       TERTIARY     远处照片 (slot 3~6)
+       BACKGROUND   最远照片 (slot 7~8)
 
-     规则:相邻两个 Style 必须分配不同的 motion,避免"重复感"。
+     每个 Motion Language 根据层级给出不同的子行为:
+       PRIMARY      主动运动(取决于 motion 本身的特征,如 camera push / breathing / flip)
+       SECONDARY    慢速 orbit,小 amplitude
+       TERTIARY     parallax drift,依赖 z 深度,更慢更小
+       BACKGROUND   几乎静止,仅 0.5px 极轻微浮动(避免"全静"破坏氛围连续性)
+
+     跨 Style 时,每张卡片根据 photo 与当前 active 的距离重新判定 tier;
+     motion 输出按 tier 计算,morph 跨段时 lerp from→to,中间态自然混合。
   */
   const ZERO_MOTION = { dx:0, dy:0, dz:0, dRotX:0, dRotY:0, dRotZ:0, dScale:0, dBrightness:0, dBlur:0, dOpacity:0 };
 
+  /* 给定 slot 在 DOM 中的视觉距离(slot.z 越小越远),判定层级 */
+  function tierOfSlot(i, slot){
+    if(i === 0) return 'PRIMARY';
+    if(i <= 2)  return 'SECONDARY';
+    if(i <= 6)  return 'TERTIARY';
+    return 'BACKGROUND';
+  }
+
+  /* 各层级在 morph 中的 amplitude 缩放(用于给不同层级不同强度) */
+  const TIER_AMP = {
+    PRIMARY:    { dx:1.0, dy:1.0, dz:1.0, dRotX:1.0, dRotY:1.0, dRotZ:1.0, dScale:1.0, dBrightness:1.0, dBlur:1.0, dOpacity:1.0 },
+    SECONDARY:  { dx:0.55, dy:0.55, dz:0.6, dRotX:0.5, dRotY:0.5, dRotZ:0.55, dScale:0.6, dBrightness:0.5, dBlur:0.5, dOpacity:1.0 },
+    TERTIARY:   { dx:0.30, dy:0.30, dz:0.35, dRotX:0.25, dRotY:0.25, dRotZ:0.30, dScale:0.3, dBrightness:0.3, dBlur:0.3, dOpacity:1.0 },
+    BACKGROUND: { dx:0.08, dy:0.08, dz:0.1,  dRotX:0.05, dRotY:0.05, dRotZ:0.06, dScale:0.05, dBrightness:0.1, dBlur:0.1, dOpacity:1.0 },
+  };
+
+  /* 通用辅助:对每个 apply 函数返回的偏移按层级缩放 */
+  function scaleByTier(offset, tier){
+    const a = TIER_AMP[tier];
+    return {
+      dx: offset.dx * a.dx,
+      dy: offset.dy * a.dy,
+      dz: offset.dz * a.dz,
+      dRotX: offset.dRotX * a.dRotX,
+      dRotY: offset.dRotY * a.dRotY,
+      dRotZ: offset.dRotZ * a.dRotZ,
+      dScale: offset.dScale * a.dScale,
+      dBrightness: offset.dBrightness * a.dBrightness,
+      dBlur: offset.dBlur * a.dBlur,
+      dOpacity: offset.dOpacity * a.dOpacity,
+    };
+  }
+
+  /* 通用:BACKGROUND 几乎静止的微弱浮动 */
+  function backgroundBreath(t, i){
+    return {
+      dx: Math.sin(t * 0.21 + i * 1.3) * 0.6,
+      dy: Math.cos(t * 0.17 + i * 0.9) * 0.4,
+      dz: 0,
+      dRotX:0, dRotY:0, dRotZ: Math.sin(t * 0.13 + i) * 0.15,
+      dScale: Math.sin(t * 0.19 + i) * 0.003,
+      dBrightness: Math.sin(t * 0.11 + i) * 0.01,
+      dBlur:0, dOpacity:0,
+    };
+  }
+
+  /* 12 种 Motion Language:evaluate 返回 PRIMARY 行为的"基线偏移",
+     SECURITY/TERTIARY/BACKGROUND 由 tier 自动缩放。
+     这样既保证各层行为不同,又保留每种 motion 的语言特征。 */
   const MOTIONS = {
-    /* 01 FLOAT — 安静漂浮 */
+    /* 01 FLOAT — 安静漂浮,主卡稍大浮动 */
     FLOAT:{
       name:'FLOAT',
-      evaluate(t, i, slot){
+      evaluate(t, i, slot, tier){
         const p = i * 1.37;
-        return {
+        const base = {
           dx:0,
           dy: Math.sin(t * 0.7 + p) * 6 + Math.sin(t * 0.31 + p*2.1) * 2.5,
           dz:0,
@@ -133,28 +190,32 @@
           dScale: Math.sin(t * 0.5 + p) * 0.012,
           dBrightness:0, dBlur:0, dOpacity:0,
         };
+        if(tier === 'BACKGROUND') return backgroundBreath(t, i);
+        return scaleByTier(base, tier);
       }
     },
-    /* 02 CAMERA_PUSH — 镜头推进(配合 cameraRig scale 拉远) */
+    /* 02 CAMERA_PUSH — 主卡摄影机推进,副卡慢速跟 */
     CAMERA_PUSH:{
       name:'CAMERA_PUSH',
-      evaluate(t, i, slot){
-        return {
+      evaluate(t, i, slot, tier){
+        const base = {
           dx:0, dy: Math.sin(t*0.5 + i*0.8) * 1.5, dz:0,
           dRotX:0, dRotY:0, dRotZ: Math.sin(t*0.27 + i) * 0.25,
           dScale:0, dBrightness: Math.sin(t*0.4) * 0.05, dBlur:0, dOpacity:0,
         };
+        if(tier === 'BACKGROUND') return backgroundBreath(t, i);
+        return scaleByTier(base, tier);
       }
     },
-    /* 03 ORBIT — 围绕主卡弧线运动 */
+    /* 03 ORBIT — 主卡稳定,副卡慢速 orbit */
     ORBIT:{
       name:'ORBIT',
-      evaluate(t, i, slot){
+      evaluate(t, i, slot, tier){
         if(i === 0) return ZERO_MOTION;
         const phase = i * 1.91 + 0.5;
         const speed = (i % 2 === 0 ? 1 : -1) * 0.18;
         const radius = 8 + (i * 1.5);
-        return {
+        const base = {
           dx: Math.sin(t * speed + phase) * radius,
           dy: Math.cos(t * speed + phase) * radius * 0.55,
           dz: Math.sin(t * speed * 0.7 + phase) * 8,
@@ -163,33 +224,39 @@
           dScale: Math.cos(t * speed * 0.5 + phase) * 0.015,
           dBrightness:0, dBlur:0, dOpacity:0,
         };
+        if(tier === 'BACKGROUND') return backgroundBreath(t, i);
+        return scaleByTier(base, tier);
       }
     },
-    /* 04 CARD_FLIP — 主卡 rotateY 翻面 */
+    /* 04 CARD_FLIP — 主卡翻面,副卡轻微浮动 */
     CARD_FLIP:{
       name:'CARD_FLIP',
-      evaluate(t, i, slot){
-        if(i !== 0){
-          return { dx:0, dy: Math.sin(t*0.4 + i)*2, dz:0, dRotX:0, dRotY:0, dRotZ:0, dScale:0, dBrightness:0, dBlur:0, dOpacity:0 };
+      evaluate(t, i, slot, tier){
+        if(i === 0){
+          const flipT = (Math.sin(t * 0.35) + 1) / 2;
+          const base = {
+            dx:0, dy:0, dz:0, dRotX:0, dRotY: flipT * 180, dRotZ:0,
+            dScale:0,
+            dBrightness: Math.sin(flipT * Math.PI) * 0.15,
+            dBlur:0, dOpacity:0,
+          };
+          return scaleByTier(base, tier);
         }
-        const flipT = (Math.sin(t * 0.35) + 1) / 2;
-        return {
-          dx:0, dy:0, dz:0,
-          dRotX:0,
-          dRotY: flipT * 180,
-          dRotZ:0,
-          dScale:0,
-          dBrightness: Math.sin(flipT * Math.PI) * 0.15,
-          dBlur:0, dOpacity:0,
+        const base = {
+          dx:0, dy: Math.sin(t*0.4 + i)*2, dz:0,
+          dRotX:0, dRotY:0, dRotZ: Math.sin(t*0.3 + i*0.8) * 0.4,
+          dScale:0, dBrightness:0, dBlur:0, dOpacity:0,
         };
+        if(tier === 'BACKGROUND') return backgroundBreath(t, i);
+        return scaleByTier(base, tier);
       }
     },
-    /* 05 STACK_SHIFT — 一叠纸轻微摇晃 */
+    /* 05 STACK_SHIFT — 一叠纸摇晃 */
     STACK_SHIFT:{
       name:'STACK_SHIFT',
-      evaluate(t, i, slot){
+      evaluate(t, i, slot, tier){
         const phase = i * 0.78;
-        return {
+        const base = {
           dx: Math.sin(t * 0.9 + phase) * 4 * (i / 9),
           dy: Math.cos(t * 0.7 + phase) * 3 * (i / 9),
           dz: Math.sin(t * 0.5 + phase) * 4,
@@ -197,17 +264,19 @@
           dRotZ: Math.sin(t * 0.6 + phase) * (0.6 + i * 0.15),
           dScale:0, dBrightness:0, dBlur:0, dOpacity:0,
         };
+        if(tier === 'BACKGROUND') return backgroundBreath(t, i);
+        return scaleByTier(base, tier);
       }
     },
-    /* 06 SCATTER — 辐射状散开(主图保持稳定) */
+    /* 06 SCATTER — 主卡稳定,副卡辐射散开 */
     SCATTER:{
       name:'SCATTER',
-      evaluate(t, i, slot){
+      evaluate(t, i, slot, tier){
         if(i === 0) return ZERO_MOTION;
         const ang = (i / 9) * Math.PI * 2 + t * 0.05;
         const breathe = (Math.sin(t * 0.6) + 1) / 2;
         const radius = 8 + breathe * 18;
-        return {
+        const base = {
           dx: Math.cos(ang) * radius,
           dy: Math.sin(ang) * radius * 0.6,
           dz:0,
@@ -217,16 +286,18 @@
           dBrightness: Math.sin(t * 0.3 + i) * 0.04,
           dBlur:0, dOpacity:0,
         };
+        if(tier === 'BACKGROUND') return backgroundBreath(t, i);
+        return scaleByTier(base, tier);
       }
     },
     /* 07 MAGNETIC_GATHER — 磁吸聚拢 */
     MAGNETIC_GATHER:{
       name:'MAGNETIC_GATHER',
-      evaluate(t, i, slot){
+      evaluate(t, i, slot, tier){
         const breathe = (Math.sin(t * 0.5 + 1.5) + 1) / 2;
         const radius = 18 - breathe * 16;
         const ang = (i / 9) * Math.PI * 2 + t * 0.08;
-        return {
+        const base = {
           dx: Math.cos(ang) * radius,
           dy: Math.sin(ang) * radius * 0.5,
           dz: Math.sin(t * 0.4 + i) * 4,
@@ -236,13 +307,15 @@
           dBrightness: breathe * 0.05,
           dBlur:0, dOpacity:0,
         };
+        if(tier === 'BACKGROUND') return backgroundBreath(t, i);
+        return scaleByTier(base, tier);
       }
     },
-    /* 08 FILM_SCROLL — 横向滚动 */
+    /* 08 FILM_SCROLL — 横向胶片滚动,主卡稍大 */
     FILM_SCROLL:{
       name:'FILM_SCROLL',
-      evaluate(t, i, slot){
-        return {
+      evaluate(t, i, slot, tier){
+        const base = {
           dx: Math.sin(t * 0.3 + i * 0.4) * 3,
           dy:0,
           dz:0,
@@ -250,15 +323,17 @@
           dRotZ: Math.sin(t * 0.4 + i * 0.4) * 0.4,
           dScale:0, dBrightness:0, dBlur:0, dOpacity:0,
         };
+        if(tier === 'BACKGROUND') return backgroundBreath(t, i);
+        return scaleByTier(base, tier);
       }
     },
-    /* 09 PARALLAX_DRIFT — 视差漂浮,远近不同速度 */
+    /* 09 PARALLAX_DRIFT — 视差漂浮 */
     PARALLAX_DRIFT:{
       name:'PARALLAX_DRIFT',
-      evaluate(t, i, slot){
+      evaluate(t, i, slot, tier){
         const depth = 1 - clamp((slot.z + 200) / -300, 0, 1);
         const speed = 0.15 + depth * 0.6;
-        return {
+        const base = {
           dx: Math.sin(t * speed + i * 1.2) * (3 + depth * 6),
           dy: Math.cos(t * speed * 0.7 + i) * (2 + depth * 4),
           dz: Math.sin(t * speed * 0.5 + i) * (1 + depth * 3),
@@ -267,15 +342,17 @@
           dRotZ: Math.sin(t * speed * 0.3 + i) * (0.4 + depth * 0.8),
           dScale:0, dBrightness:0, dBlur:0, dOpacity:0,
         };
+        if(tier === 'BACKGROUND') return backgroundBreath(t, i);
+        return scaleByTier(base, tier);
       }
     },
-    /* 10 BREATHING — 同步呼吸:scale + brightness + blur 一起起伏 */
+    /* 10 BREATHING — 主卡呼吸式缩放+光晕,副卡慢呼吸 */
     BREATHING:{
       name:'BREATHING',
-      evaluate(t, i, slot){
+      evaluate(t, i, slot, tier){
         const breath = Math.sin(t * 0.6);
         const phase = i * 0.4;
-        return {
+        const base = {
           dx:0, dy: Math.sin(t * 0.4 + phase) * 1.5, dz:0,
           dRotX:0, dRotY:0, dRotZ: Math.sin(t * 0.3 + phase) * 0.5,
           dScale: breath * 0.02,
@@ -283,17 +360,19 @@
           dBlur: Math.max(0, breath * 0.4),
           dOpacity:0,
         };
+        if(tier === 'BACKGROUND') return backgroundBreath(t, i);
+        return scaleByTier(base, tier);
       }
     },
-    /* 11 DISINTEGRATE — 周期性 glitch 脉冲 */
+    /* 11 DISINTEGRATE — 周期性 glitch 脉冲,主卡最剧烈 */
     DISINTEGRATE:{
       name:'DISINTEGRATE',
-      evaluate(t, i, slot){
+      evaluate(t, i, slot, tier){
         const pulseT = (t % 2.5) / 2.5;
         if(pulseT > 0.7){
           const k = (pulseT - 0.7) / 0.3;
           const dir = i % 4;
-          return {
+          const base = {
             dx: (dir === 0 ? 1 : dir === 1 ? -1 : dir === 2 ? 1 : -1) * k * 14,
             dy: (dir === 0 ? -1 : dir === 1 ? 1 : dir === 2 ? 1 : -1) * k * 10,
             dz: k * 20,
@@ -305,20 +384,23 @@
             dBlur: k * 1.2,
             dOpacity: -k * 0.25,
           };
+          return scaleByTier(base, tier);
         }
-        return {
+        const base = {
           dx: Math.sin(t + i) * 0.5, dy:0, dz:0,
           dRotX:0, dRotY:0, dRotZ:0, dScale:0, dBrightness:0, dBlur:0, dOpacity:0,
         };
+        if(tier === 'BACKGROUND') return backgroundBreath(t, i);
+        return scaleByTier(base, tier);
       }
     },
-    /* 12 RECONSTRUCT — 从各方向缓慢拼回 */
+    /* 12 RECONSTRUCT — 从各方向缓慢归位 */
     RECONSTRUCT:{
       name:'RECONSTRUCT',
-      evaluate(t, i, slot){
+      evaluate(t, i, slot, tier){
         const phase = i * 0.87;
         const settle = (Math.sin(t * 0.35 + phase) + 1) / 2;
-        return {
+        const base = {
           dx: Math.cos(t * 0.2 + phase) * (5 - settle * 4),
           dy: Math.sin(t * 0.2 + phase) * (4 - settle * 3),
           dz: Math.sin(t * 0.15 + phase) * 4,
@@ -328,6 +410,8 @@
           dBrightness: settle * 0.06,
           dBlur: 0, dOpacity: 0,
         };
+        if(tier === 'BACKGROUND') return backgroundBreath(t, i);
+        return scaleByTier(base, tier);
       }
     },
   };
@@ -767,9 +851,12 @@
       // slot (x,y) 是 %,转像素(基于当前 carousel 实际尺寸)
       const px = pctToPx(slot);
 
+      // 层级判定:基于 slot 与 active 的视觉距离
+      const tier = tierOfSlot(i, slot);
+
       // Motion Language 偏移:分别评估 from / to 后 lerp
-      const offA = fromMotion.evaluate(camTime, i, slot);
-      const offB = toMotion.evaluate(camTime, i, slot);
+      const offA = fromMotion.evaluate(camTime, i, slot, tier);
+      const offB = toMotion.evaluate(camTime, i, slot, tier);
       const off  = lerpMotionOffset(offA, offB, morphT);
       // amp 控制整体强度,0 时完全静止(morph 边界态)
       const m = amp;
