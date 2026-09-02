@@ -1,26 +1,23 @@
-/* ==================== Memory Director (Shot-based) ====================
-   整个 S1 场景的视觉大脑。
-   架构:
-     MusicTimeline     按歌词情绪切分 8 个 StyleStage(决定 slots/cardVisual/fx/typography)
-     ShotTimeline      按音乐时间切分若干一次性 Shot(决定 camera 运动)
-     Camera Shot       10 种一次性 Shot: ESTABLISHING / PUSH_IN / SIDE_TRACK /
-                       DOLLY_THROUGH / ORBIT / CRANE / PUSH_RACK_FOCUS / SNAP_ZOOM /
-                       PULL_AWAY / STILLNESS
-                       每个 Shot 有开始/发展/结束,不 infinite loop。
-     RenderLoop        单 RAF: Shot 决定 camera transform → 写入 .camera-rig。
-                       卡片只做"服务于相机"的小幅 parallax,不再自身随机漂浮/旋转。
+/* ==================== Memory Director V5 ====================
+   《特别的人》Cinematic Camera + Lyrics Sync Director Spec V5
+
+   整体结构 — "摄影机在回忆中穿行":
+
+     MusicTimeline    按歌词情绪切分 8 个 StyleStage(决定 slots/cardVisual/fx/typography)
+     ShotTimeline     8 个 Sequence: Memory Discovery → Intimacy → Chorus Expansion
+                     → Time Rewind → Memory Explosion → Waiting → Final Recognition → Afterglow
+     LyricCues        53 个歌词触发点,每个带 motionType:
+                       micro / emotion / key / time-rewind / final
+     HeroLight        Hero Card 的 radial glow,opacity 跟随关键歌词
+     EventTimeline    一次性的卡片动作(time-rewind / hero-depth-enter / background-crowd /
+                     group-gather-outside / focus-pull / slow-push / depth-dive 等)
 
    设计原则:
-     - 卡片不自身无限旋转 / 圆周运动 / 随机漂浮
-     - Camera 是主要运动源(push/pull/track/dolly/orbit/crane)
-     - 卡片有固定 Z 深度(-700 ~ 0),相机推进时近卡快速掠过、远卡几乎不动(parallax)
-     - 包含 Stillness 镜头(Motion → Stillness → Motion 形成节奏)
-     - Shot 一次性完成,不循环
-
-   Render Layer 架构 (氛围层 fixed 全视口,camera 不影响背景):
-     L0 .layer-bg / L1 .layer-ambient / L2 .layer-particles / L4 .layer-effects / L5 .layer-typography
-     都是 position:fixed inset:0,与 camera 完全解耦。
-     L3 .layer-photo(camera-rig + 9 张 card)在 .carousel-area 内,接受 perspective。
+     - 歌词 → 情绪 → Camera → Depth → Card → Light → Lyrics(完整视觉链)
+     - 不是"歌词变化 = 照片切换",而是 Camera + Depth + Choreography 一起响应
+     - Motion Density: 静→中→高→中→高→极低→高→低
+     - 卡片不自身无限旋转/漂浮;Camera 是主要运动源
+     - Hero 始终是视觉焦点,镜头时刻围绕 Hero 编舞
 */
 (function(){
   'use strict';
@@ -61,6 +58,7 @@
       stars:    document.getElementById('fxStars'),
       particles:document.getElementById('fxParticles'),
       rgb:      document.getElementById('fxRgbSplit'),
+      heroLight:document.getElementById('fxHeroLight'),
     },
   };
 
@@ -621,6 +619,75 @@
         z: 0, rotX: 0, rotY: 0, scale: 1,
       },
     }),
+    /* 11 MICRO_PULL — 极短 350ms 的轻微拉远,Spec V5 用作"被拉开"的视觉 */
+    MICRO_PULL: (p, t) => {
+      // 整体只持续 ~1.5s,然后归零返回
+      const k = p < 0.3 ? p/0.3 : (1 - (p-0.3)/0.7);
+      return {
+        cam: {
+          x: Math.sin(t*0.04)*1.5 + 15 * k,
+          y: Math.sin(t*0.05)*1,
+          z: -k * 30,
+          rotX: 0, rotY: 0,
+          scale: 1 - k*0.015,
+        },
+      };
+    },
+    /* 12 SLOW_PUSH — 比 PUSH_IN 更慢、更长的推进(Spec V5:Long Push for "而我曾经多次的等待未来") */
+    SLOW_PUSH: (p, t) => {
+      const k = CURVES.easeInOut(p);
+      return {
+        cam: {
+          x: Math.sin(t*0.04)*1.5,
+          y: Math.sin(t*0.05)*1,
+          z: k * 90,        // 推进更少
+          rotX: 0, rotY: 0,
+          scale: 1 + k*0.035,
+        },
+      };
+    },
+    /* 13 LATERAL_TRACK — 摄影机横向缓慢漂移(Spec V5:"今后的岁月") */
+    LATERAL_TRACK: (p, t) => {
+      // 短 lateral,避免太宽
+      const k = CURVES.easeInOut(p);
+      const dir = (Math.floor(t) % 2 === 0) ? 1 : -1;
+      return {
+        cam: {
+          x: -80 + k * 160 * dir + Math.sin(t*0.04)*1.5,
+          y: Math.sin(t*0.05)*1,
+          z: 0, rotX: 0,
+          rotY: 0,
+          scale: 1,
+        },
+      };
+    },
+    /* 14 REVERSE_PARALLAX — 反向视差(Spec V5:"让那时间每一刻在倒退")
+          摄影机 Pull,所有照片整体产生"远离"的方向,但深度反向 */
+    REVERSE_PARALLAX: (p, t) => {
+      const k = CURVES.easeOut(p);
+      return {
+        cam: {
+          x: Math.sin(t*0.04)*1,
+          y: Math.sin(t*0.05)*0.8,
+          z: -k * 250,
+          rotX: 0, rotY: 0,
+          scale: 1 - k*0.08,
+        },
+      };
+    },
+    /* 15 HERO_DEPTH_ENTER — Hero 从极远进入前景(Spec V5:"总有你的存在") */
+    HERO_DEPTH_ENTER: (p, t) => {
+      const k = CURVES.easeInOut(p);
+      return {
+        cam: {
+          x: Math.sin(t*0.04)*1.5,
+          y: Math.sin(t*0.05)*1,
+          z: -k * 100,   // 推进前略拉远
+          rotX: 0, rotY: 0,
+          scale: 1 + k*0.06,
+        },
+      };
+    },
   };
 
   /* ===================== Shot Timeline ====================
@@ -635,48 +702,100 @@
        glitch (170-195):  SNAP_ZOOM → DOLLY_THROUGH → SIDE_TRACK
        constellation (195-259): PULL_AWAY → STILLNESS → ORBIT → STILLNESS → PULL_AWAY(收尾)
   */
+  /* ===================== Shot Timeline (Director Spec V5) ====================
+     8 个 Sequence 严格按歌词结构划分:
+
+     01 Memory Discovery       0:00–0:15   建立空间 + Perspective Sweep + Stillness
+     02 Intimacy              0:15–0:42   Camera Push + Focus Pull + Group Lateral Tracking
+     03 Chorus Expansion      1:08–1:30   Hero Reveal + Group Gather + Snap Zoom
+     04 Time Rewind (1)       1:29–1:38   Reverse Parallax + Old Memory Enter
+     04b Chorus Outro         1:38–1:44   Hero Light + Stillness Hit
+     05 Second Verse          1:48–2:13   Lateral Track + Depth Dive + Camera Pass
+     06 Memory Explosion      2:13–2:38   Camera Pass + Group Gather + Time Rewind
+     06b Foreground Cover     2:38–2:50   Foreground Pass + Hero Swap
+     07 Waiting (Bridge)      2:50–3:18   Pull + Long Push + Background Crowd + HERO ARRIVAL
+     08 Final Recognition     3:18–3:49   Hero Reveal + Reassemble + Final Slow Push
+     09 Afterglow             3:49–4:19   Slow Pull + Star Dust + Final Stillness
+
+     每个 Shot 仍然是一次性曲线(easeInOut / easeOut / overshoot),不循环。
+  */
   const SHOT_TIMELINE = [
-    // cinematic (0-15s)
-    { t: 0,     shot: 'ESTABLISHING' },
-    { t: 6,     shot: 'PUSH_IN' },
-    { t: 13,    shot: 'STILLNESS' },
-    // film (15-55s)
-    { t: 16,    shot: 'SIDE_TRACK' },
-    { t: 25,    shot: 'STILLNESS' },
-    { t: 27,    shot: 'DOLLY_THROUGH' },
-    { t: 35,    shot: 'PULL_AWAY' },
-    { t: 42,    shot: 'ORBIT' },
-    // polaroid (55-90s)
-    { t: 55,    shot: 'CRANE' },
-    { t: 63,    shot: 'STILLNESS' },
-    { t: 65,    shot: 'ORBIT' },
-    { t: 78,    shot: 'SIDE_TRACK' },
-    // editorial (90-115s)
-    { t: 90,    shot: 'PUSH_RACK_FOCUS' },
-    { t: 98,    shot: 'STILLNESS' },
-    { t: 101,   shot: 'SIDE_TRACK' },
-    { t: 110,   shot: 'PUSH_IN' },
-    // collage (115-135s)
-    { t: 115,   shot: 'DOLLY_THROUGH' },
-    { t: 122,   shot: 'SNAP_ZOOM' },
-    { t: 123,   shot: 'ORBIT' },
-    { t: 132,   shot: 'STILLNESS' },
-    // dream (135-170s)
-    { t: 135,   shot: 'PULL_AWAY' },
-    { t: 145,   shot: 'STILLNESS' },
-    { t: 148,   shot: 'PUSH_RACK_FOCUS' },
-    { t: 158,   shot: 'ORBIT' },
-    // glitch (170-195s)
-    { t: 170,   shot: 'SNAP_ZOOM' },
-    { t: 171,   shot: 'DOLLY_THROUGH' },
-    { t: 180,   shot: 'SIDE_TRACK' },
-    { t: 190,   shot: 'STILLNESS' },
-    // constellation (195-259s)
-    { t: 195,   shot: 'PULL_AWAY' },
-    { t: 205,   shot: 'STILLNESS' },
-    { t: 210,   shot: 'ORBIT' },
-    { t: 230,   shot: 'STILLNESS' },
-    { t: 240,   shot: 'PULL_AWAY' },
+    // === Sequence 01 Memory Discovery (0:00–0:15) ===
+    { t: 0,      shot: 'ESTABLISHING' },       // 开场静
+    { t: 4,      shot: 'SLOW_PUSH' },           // 第一批 Background Cards 出现
+    { t: 8,      shot: 'PUSH_IN' },             // 摄影机向空间深处移动
+    { t: 12,     shot: 'STILLNESS' },           // 照片稳定,歌词即将开始
+
+    // === Sequence 02 Intimacy (0:15–0:42) ===
+    { t: 15,     shot: 'PUSH_IN' },             // "爱一个人或许要慷慨" Hero 第一次靠近
+    { t: 20,     shot: 'STILLNESS' },           // "若只想要被爱" 收
+    { t: 22,     shot: 'PUSH_RACK_FOCUS' },     // "最后没有了对白" Focus Pull
+    { t: 27,     shot: 'PUSH_RACK_FOCUS' },     // "必须有你我的情真" Focus 回来
+    { t: 31,     shot: 'LATERAL_TRACK' },       // "不求计分的平等" Lateral Tracking
+    { t: 34,     shot: 'STILLNESS' },           // "总有幸福有心疼" 双层照片编舞
+    { t: 38,     shot: 'PULL_AWAY' },           // "生命的起伏要认可" Camera 微微 Pull
+    { t: 41,     shot: 'STILLNESS' },           // 段末约 600ms Stillness
+
+    // === Sequence 03 Chorus Expansion (1:08–1:30) ===
+    { t: 42,     shot: 'STILLNESS' },           // 续上,持续到副歌前
+    { t: 68,     shot: 'PUSH_IN' },             // "我们是对方 特别的人" Hero Reveal
+    { t: 75,     shot: 'PUSH_IN' },             // "奋不顾身 难舍难分" Group Motion (slow push)
+    { t: 78,     shot: 'STILLNESS' },           // "不是一般人的认真" Stillness Hit 500ms
+    { t: 82,     shot: 'PULL_AWAY' },           // "若只有一天" Camera Pull (Dolly Zoom 感)
+    { t: 89,     shot: 'REVERSE_PARALLAX' },    // "让那时间每一刻在倒退" Time Rewind (1)
+
+    // === Sequence 03b Chorus Outro (1:38–1:48) ===
+    { t: 93,     shot: 'PULL_AWAY' },           // "生命中有万事的可能" 空间扩大
+    { t: 98,     shot: 'PULL_AWAY' },           // "你就是我要遇见的 特别的人" Hero Isolation
+    { t: 100,    shot: 'STILLNESS' },           // 800ms Stillness
+
+    // === Sequence 04 Second Verse (1:48–2:13) ===
+    { t: 108,    shot: 'LATERAL_TRACK' },       // "懂一个人也许要忍耐" Slow Drift Right
+    { t: 113,    shot: 'PULL_AWAY' },           // "要经过了意外" Depth Dive 起点
+    { t: 115,    shot: 'PUSH_IN' },             // "才了解所谓的爱" Focus
+    { t: 119,    shot: 'LATERAL_TRACK' },       // "今后的岁月" Lateral
+    { t: 122,    shot: 'STILLNESS' },           // "让我们一起了解" 两侧靠近
+    { t: 125,    shot: 'PULL_AWAY' },           // "多少天长地久" Camera Pull
+    { t: 128,    shot: 'STILLNESS' },           // "有几回细水长流" 600-900ms Stillness
+
+    // === Sequence 05 Memory Explosion (2:13–2:38) ===
+    { t: 133,    shot: 'PUSH_IN' },             // "我们是对方 特别的人" Camera Pass + Hero Reveal
+    { t: 140,    shot: 'PUSH_IN' },             // "奋不顾身" Group Gather
+    { t: 144,    shot: 'STILLNESS' },           // "不是一般人的认真" 400-600ms 静止
+    { t: 147,    shot: 'PULL_AWAY' },           // "若只有一天" Hero 轻微后退
+    { t: 154,    shot: 'REVERSE_PARALLAX' },    // "让那时间每一刻在倒退" Time Rewind (2)
+
+    // === Sequence 05b Foreground Cover (2:38–2:50) ===
+    { t: 158,    shot: 'PULL_AWAY' },           // "生命中有万事的可能" 空间打开
+    { t: 163,    shot: 'PUSH_IN' },             // "你就是我要遇见的" Foreground Pass + Hero Swap
+    { t: 167,    shot: 'STILLNESS' },           // Foreground 离场后短暂静止
+
+    // === Sequence 06 Waiting / Bridge (2:50–3:18) ===
+    { t: 170,    shot: 'PULL_AWAY' },           // "有时候我们都会寂寞" Pull
+    { t: 174,    shot: 'PULL_AWAY' },           // "有时也会失败" Hero 主动远离
+    { t: 179,    shot: 'LATERAL_TRACK' },       // "想去找一个明白" 横移
+    { t: 182,    shot: 'SLOW_PUSH' },           // "而我曾经多次的等待未来" Long Push
+    { t: 188,    shot: 'STILLNESS' },           // "你何时会来" 800ms Stillness(全曲最重要的等待)
+    { t: 191,    shot: 'STILLNESS' },           // "人山人海" Background Cards Staggered Enter
+    { t: 196,    shot: 'HERO_DEPTH_ENTER' },    // "有你我的爱" Hero Arrival
+    { t: 197,    shot: 'SLOW_PUSH' },           // "我们是对方 特别的人" Last Chorus 入口
+
+    // === Sequence 07 Final Recognition (3:18–3:49) ===
+    { t: 205,    shot: 'PUSH_IN' },             // "奋不顾身" Reassemble
+    { t: 209,    shot: 'STILLNESS' },           // "不是一般人的认真" Settle
+    { t: 212,    shot: 'PULL_AWAY' },           // "若只有一天" Pull + Reverse Parallax
+    { t: 219,    shot: 'REVERSE_PARALLAX' },    // "让那时间每一刻在倒退" 第三次 Time Rewind (轻量)
+    { t: 223,    shot: 'PULL_AWAY' },           // "生命中有万事的可能" 完整展示 Memory Space
+    { t: 228,    shot: 'PUSH_IN' },             // "你就是我要遇见的" 最终 Slow Push + Hero Light
+    { t: 232,    shot: 'STILLNESS' },           // 静止
+
+    // === Sequence 08 Afterglow (3:49–4:19) ===
+    { t: 235,    shot: 'PULL_AWAY' },           // 非常轻的 Camera Pull
+    { t: 240,    shot: 'STILLNESS' },           // Hero 恢复稳定
+    { t: 245,    shot: 'STILLNESS' },           // Star Dust + 极轻微 drift
+    { t: 252,    shot: 'PULL_AWAY' },           // 一张旧照片从 Background 缓慢出现
+    { t: 256,    shot: 'STILLNESS' },           // Very Slow Pull
+    { t: 259,    shot: 'STILLNESS' },           // 最终静止
   ];
 
   /* 获取当前 Shot 状态:shot 名 + 0..1 进度 */
@@ -727,196 +846,493 @@
   /* 事件时间轴 — 与 SHOT_TIMELINE 共存,在重要音乐节点触发
      foreground-pass 使用可见卡片(1/2/3),让前景掠过明显可见
      card-fly 在重要音乐节点触发(副歌/段落切换),戏剧性最高 */
-  const EVENT_TIMELINE = [
-    // cinematic (0-15s) — ESTABLISHING → PUSH_IN → STILLNESS
-    { t: 3,    type:'card-enter',     card:1, preset:'fly-left' },
-    { t: 7,    type:'card-enter',     card:2, preset:'fly-right' },
-    { t: 12,   type:'foreground-pass',card:1 },                // card 1 掠过镜头(可见)
+  /* ===================== Lyric Cues + Motion Events (Director Spec V5) ====================
+   V5 把 Shot 和 Event 完全歌词化:歌词出现 → 触发 Camera/Card/Light。
 
-    // film (15-55s) — SIDE_TRACK → DOLLY_THROUGH → PULL_AWAY → ORBIT
-    { t: 19,   type:'card-enter',     card:3, preset:'depth-in' },
-    { t: 25,   type:'card-fly',       card:2 },                // card 2 飞过镜头(戏剧性)
-    { t: 28,   type:'scatter' },                                // DOLLY_THROUGH 时散开
-    { t: 31,   type:'reassemble' },                              // 重新汇聚(stagger)
-    { t: 38,   type:'card-enter',     card:4, preset:'diagonal-in' },
-    { t: 46,   type:'foreground-pass',card:2 },                // card 2 掠过
+   LYRIC_CUES:每个歌词触发点带 motionType(micro/emotion/key/time-rewind/final)
+   与 LYRICS_DATA 中的 time 一一对应(0.0~0.5s offset)。
 
-    // polaroid (55-90s) — CRANE → STILLNESS → ORBIT → SIDE_TRACK
-    { t: 58,   type:'card-enter',     card:6, preset:'drop-top' },
-    { t: 68,   type:'card-fly',       card:3 },                // card 3 飞过镜头
-    { t: 70,   type:'card-enter',     card:7, preset:'rise-bottom' },
-    { t: 82,   type:'scatter' },
-    { t: 85,   type:'reassemble' },
+   新增 Event 类型:
+     hero-reveal / hero-depth-enter / hero-flee / hero-recover / hero-settle /
+     hero-zoom-in / hero-secondary / background-crowd / group-gather /
+     group-gather-outside / focus-pull / slow-push / long-push / micro-pull /
+     camera-pull / pull-reverse-parallax / depth-dive / secondary-drift /
+     lateral-track / lateral-balance / lateral-couple / soft-perspective-enter /
+     time-rewind / past-to-present / bg-fade / stillness-hit /
+     memory-space-open / final-slow-push / afterglow-pull /
+     afterglow-memories / lyrics-focus / foreground-cover-swap / old-memory-enter
+*/
 
-    // editorial (90-115s) — PUSH_RACK_FOCUS → STILLNESS → SIDE_TRACK → PUSH_IN
-    { t: 95,   type:'card-enter',     card:3, preset:'rotate-reveal' },
-    { t: 108,  type:'foreground-pass',card:1 },
-
-    // collage (115-135s) — DOLLY_THROUGH → SNAP_ZOOM → ORBIT → STILLNESS
-    { t: 119,  type:'scatter' },
-    { t: 124,  type:'reassemble' },
-    { t: 128,  type:'card-fly',       card:4 },
-    { t: 130,  type:'card-enter',     card:7, preset:'fly-right' },
-
-    // dream (135-170s) — PULL_AWAY → STILLNESS → PUSH_RACK_FOCUS → ORBIT
-    { t: 140,  type:'card-enter',     card:4, preset:'depth-out' },
-    { t: 155,  type:'card-enter',     card:5, preset:'diagonal-in' },
-    { t: 162,  type:'foreground-pass',card:3 },
-
-    // glitch (170-195s) — SNAP_ZOOM → DOLLY_THROUGH → SIDE_TRACK → STILLNESS
-    { t: 174,  type:'scatter' },
-    { t: 178,  type:'reassemble' },
-    { t: 188,  type:'card-fly',       card:5 },
-
-    // constellation (195-259s) — PULL_AWAY → STILLNESS → ORBIT → STILLNESS → PULL_AWAY
-    { t: 215,  type:'card-enter',     card:8, preset:'depth-in' },
-    { t: 225,  type:'foreground-pass',card:2 },
-    { t: 245,  type:'scatter' },
-    { t: 250,  type:'reassemble' },
-    { t: 255,  type:'card-fly',       card:1 },                // 收尾戏剧性
-  ];
-
-  /* 事件默认时长(ms) */
+  /* ===================== Event Default Duration ====================
+     每种事件类型的默认持续时间(ms)。
+     LYRIC_CUES 中 events 数组里的 dur 会优先覆盖这里的默认值。 */
   const EVENT_DEFAULT_DURATION = {
-    'card-enter':     1200,
-    'foreground-pass':1000,
-    'scatter':        900,
-    'reassemble':     1100,
-    'card-fly':       1400,
+    'card-enter':           1200,
+    'foreground-pass':      1000,
+    'foreground-cover-swap':1500,
+    'scatter':              900,
+    'reassemble':           1100,
+    'card-fly':             1400,
+    'hero-reveal':          1400,
+    'camera-pass-hero-reveal': 1400,
+    'hero-depth-enter':     1600,
+    'background-crowd':     1800,
+    'group-gather':         1200,
+    'group-gather-outside': 1200,
+    'focus-pull':           1100,
+    'slow-push':            1600,
+    'long-push':            1500,
+    'micro-pull':           1400,
+    'camera-pull':          1100,
+    'pull-reverse-parallax':1400,
+    'depth-dive':           1400,
+    'secondary-drift':      900,
+    'lateral-track':        3000,
+    'lateral-balance':      1500,
+    'lateral-couple':       1500,
+    'soft-perspective-enter':1400,
+    'hero-zoom-in':         1300,
+    'hero-settle':          1100,
+    'hero-secondary':       1200,
+    'hero-flee':            1500,
+    'hero-light':           1500,
+    'hero-recover':         2000,
+    'old-memory-enter':     1700,
+    'time-rewind':          1700,
+    'past-to-present':      1300,
+    'bg-fade':              2000,
+    'stillness-hit':        800,
+    'memory-space-open':    1500,
+    'final-slow-push':      2200,
+    'afterglow-pull':       2500,
+    'afterglow-memories':   3500,
+    'lyrics-focus':         1800,
   };
 
-  /* 获取当前活跃事件 — 返回数组,每个含 { type, card?, preset?, p, progress, startT, endT }
-     p = 0..1 事件进度
-     注:scatter/reassemble 期间,scatter 完成后立即 reassemble,所以两事件不重叠
-  */
-  function getActiveEvents(time){
-    const out = [];
-    for(const ev of EVENT_TIMELINE){
-      const dur = (ev.dur || EVENT_DEFAULT_DURATION[ev.type]) / 1000;
-      const startT = ev.t;
-      const endT = ev.t + dur;
-      if(time >= startT && time < endT){
-        const p = clamp((time - startT) / dur, 0, 1);
-        out.push({ ...ev, p, startT, endT });
-      }
+const LYRIC_CUES = [
+  // === Verse 1 (15-42) ===
+  { idx:0,  motionType:'micro',  events:[] },
+  { idx:1,  motionType:'emotion',events:[{type:'micro-pull', dur:1400}] },
+  { idx:2,  motionType:'emotion',events:[{type:'focus-pull', dir:'away', dur:1200}] },
+  { idx:3,  motionType:'key',    events:[{type:'focus-pull', dir:'back', dur:1100},{type:'secondary-drift', dur:900}] },
+  { idx:4,  motionType:'micro',  events:[{type:'lateral-balance', dur:1500}] },
+  { idx:5,  motionType:'key',    events:[{type:'depth-dive', card:1, dur:1300},{type:'card-enter', card:2, preset:'fly-left', dur:1200}] },
+  { idx:6,  motionType:'emotion',events:[{type:'micro-pull', dur:1300}] },
+  { idx:7,  motionType:'micro',  events:[] },
+  { idx:8,  motionType:'micro',  events:[{type:'micro-pull', dur:350}] },
+  { idx:9,  motionType:'emotion',events:[{type:'hero-settle', dur:1100}] },
+  { idx:10, motionType:'micro',  events:[{type:'lateral-track', dur:3000}] },
+  { idx:11, motionType:'micro',  events:[{type:'soft-perspective-enter', card:3, dur:1400}] },
+  { idx:12, motionType:'emotion',events:[{type:'hero-zoom-in', dur:1300}] },
+  { idx:13, motionType:'emotion',events:[{type:'slow-push', dur:1600},{type:'bg-fade', amount:0.12}] },
+
+  // === Verse 2 (68-98) — First Chorus ===
+  { idx:14, motionType:'key',    events:[{type:'hero-reveal', dur:1400},{type:'card-enter', card:1, preset:'fly-left', dur:1100},{type:'card-enter', card:2, preset:'diagonal-in', dur:1100}] },
+  { idx:15, motionType:'key',    events:[{type:'group-gather', dur:1200, stagger:120}] },
+  { idx:16, motionType:'emotion',events:[{type:'stillness-hit', dur:500}] },
+  { idx:17, motionType:'emotion',events:[{type:'camera-pull', amount:0.10, dur:1100}] },
+  { idx:18, motionType:'time-rewind',events:[{type:'time-rewind', dur:1700},{type:'old-memory-enter', dur:1700}] },
+  { idx:19, motionType:'emotion',events:[{type:'camera-pull', amount:0.15, dur:1100}] },
+  { idx:20, motionType:'final',  events:[{type:'hero-light', dur:1500, op:0.15},{type:'bg-fade', amount:0.20},{type:'stillness-hit', dur:800}] },
+
+  // === Verse 3 (108-128) — Second Verse ===
+  { idx:21, motionType:'micro',  events:[{type:'lateral-track', dur:3000, dir:'right'}] },
+  { idx:22, motionType:'emotion',events:[{type:'depth-dive', card:3, dur:1500}] },
+  { idx:23, motionType:'emotion',events:[{type:'hero-secondary', dur:1200}] },
+  { idx:24, motionType:'micro',  events:[{type:'lateral-track', dur:3000}] },
+  { idx:25, motionType:'micro',  events:[{type:'lateral-couple', dur:1500}] },
+  { idx:26, motionType:'emotion',events:[{type:'camera-pull', amount:0.08, dur:1300}] },
+  { idx:27, motionType:'emotion',events:[{type:'stillness-hit', dur:700}] },
+
+  // === Verse 4 (133-163) — Second Chorus (Memory Explosion) ===
+  { idx:28, motionType:'key',    events:[{type:'camera-pass-hero-reveal', dur:1400},{type:'hero-reveal', dur:1400}] },
+  { idx:29, motionType:'key',    events:[{type:'group-gather-outside', dur:1200}] },
+  { idx:30, motionType:'emotion',events:[{type:'stillness-hit', dur:500}] },
+  { idx:31, motionType:'emotion',events:[{type:'past-to-present', dur:1300}] },
+  { idx:32, motionType:'time-rewind',events:[{type:'time-rewind', dur:1800, intensity:1.4}] },
+  { idx:33, motionType:'emotion',events:[{type:'camera-pull', amount:0.12, dur:1100}] },
+  { idx:34, motionType:'key',    events:[{type:'foreground-cover-swap', dur:1500}] },
+
+  // === Verse 5 (170-196) — Bridge / Waiting ===
+  { idx:35, motionType:'emotion',events:[{type:'bg-fade', amount:0.10},{type:'camera-pull', amount:0.10, dur:1500}] },
+  { idx:36, motionType:'emotion',events:[{type:'hero-flee', dur:1500}] },
+  { idx:37, motionType:'micro',  events:[{type:'lateral-track', dur:3000, dir:'left'},{type:'bg-fade', amount:0.05}] },
+  { idx:38, motionType:'emotion',events:[{type:'long-push', dur:1500}] },
+  { idx:39, motionType:'key',    events:[{type:'stillness-hit', dur:800}] },
+  { idx:40, motionType:'key',    events:[{type:'background-crowd', dur:1800, count:5, stagger:90}] },
+  { idx:41, motionType:'key',    events:[{type:'hero-depth-enter', dur:1600},{type:'hero-light', dur:1500, op:0.12}] },
+  { idx:42, motionType:'emotion',events:[{type:'long-push', dur:1200, amount:0.04}] },
+
+  // === Verse 6 (198-228) — Final Chorus ===
+  { idx:43, motionType:'key',    events:[{type:'hero-reveal', dur:1400},{type:'reassemble', dur:1200}] },
+  { idx:44, motionType:'emotion',events:[{type:'group-gather', dur:1000, stagger:120}] },
+  { idx:45, motionType:'emotion',events:[{type:'stillness-hit', dur:500}] },
+  { idx:46, motionType:'emotion',events:[{type:'pull-reverse-parallax', dur:1400}] },
+  { idx:47, motionType:'time-rewind',events:[{type:'time-rewind', dur:1500, intensity:0.8}] },
+  { idx:48, motionType:'emotion',events:[{type:'memory-space-open', dur:1500}] },
+  { idx:49, motionType:'final',  events:[{type:'final-slow-push', dur:2200},{type:'hero-light', dur:1800, op:0.16},{type:'bg-fade', amount:0.15},{type:'lyrics-focus', dur:1800}] },
+
+  // === Afterglow (228-259) ===
+  { idx:50, motionType:'emotion',events:[{type:'afterglow-pull', dur:2500},{type:'bg-fade', amount:0.25, blur:5}] },
+  { idx:51, motionType:'emotion',events:[{type:'hero-recover', dur:2000}] },
+  { idx:52, motionType:'emotion',events:[{type:'afterglow-memories', dur:3500}] },
+];
+
+/* ===================== Event Timeline (从 LYRIC_CUES 平铺生成,运行时初始化) ==================== */
+let EVENT_TIMELINE = [];
+function buildEventTimeline(){
+  EVENT_TIMELINE = [];
+  if(typeof lyricsData === 'undefined') return;
+  for(const cue of LYRIC_CUES){
+    for(const ev of (cue.events || [])){
+      EVENT_TIMELINE.push({
+        t: lyricsData[cue.idx] ? lyricsData[cue.idx].time : 0,
+        dur: ev.dur || EVENT_DEFAULT_DURATION[ev.type] || 1500,
+        ...ev,
+      });
     }
-    return out;
+  }
+}
+
+/* 获取当前活跃事件 — 返回数组,每个含事件所有字段 + p (0..1 进度) */
+function getActiveEvents(time){
+  const out = [];
+  for(const ev of EVENT_TIMELINE){
+    const dur = ev.dur / 1000;
+    const startT = ev.t;
+    const endT = ev.t + dur;
+    if(time >= startT && time < endT){
+      const p = clamp((time - startT) / dur, 0, 1);
+      out.push({ ...ev, p, startT, endT });
+    }
+  }
+  return out;
+}
+
+/* 计算事件对单张卡片造成的偏移 — 返回 {dx, dy, dz, dscale, drotZ, dopacity, dblur} */
+function getEventOffset(event, cardIdx, slot, time){
+  const p = event.p;
+  const type = event.type;
+
+  /* === card-enter === */
+  if(type === 'card-enter' && event.card === cardIdx){
+    const preset = ENTER_PRESETS[event.preset] || ENTER_PRESETS['fly-left'];
+    const curve = CURVES[preset.easing] || CURVES.easeOut;
+    const k = 1 - curve(p);
+    return {
+      dx: preset.dx * k, dy: preset.dy * k, dz: preset.dz * k,
+      dscale: (preset.scale - 1) * k, drotZ: preset.drz * k,
+      dopacity: -k * 0.5, dblur: 0,
+    };
   }
 
-  /* 计算事件对单张卡片造成的偏移 — 返回 {dx, dy, dz, dscale, drotZ, dopacity, dblur}
-     偏移叠加到 slot 计算后的 target 上,然后参与 lerp */
-  function getEventOffset(event, cardIdx, slot, time){
-    const p = event.p;
-    const type = event.type;
-
-    if(type === 'card-enter' && event.card === cardIdx){
-      /* ENTER PRESET:卡片从远处飞入,1→0 偏移(p=0 起始位置,p=1 无偏移)
-         使用 easeOut 让运动减速到位 */
-      const preset = ENTER_PRESETS[event.preset] || ENTER_PRESETS['fly-left'];
-      const curve = CURVES[preset.easing] || CURVES.easeOut;
-      const k = 1 - curve(p);  // 1 → 0 的偏移
-      return {
-        dx: preset.dx * k,
-        dy: preset.dy * k,
-        dz: preset.dz * k,
-        dscale: (preset.scale - 1) * k,  // 起始 scale 0.7 → 减 0.3,最终 0
-        drotZ: preset.drz * k,
-        dopacity: -k * 0.5,  // 起始 opacity 0.5,最终 0 偏移
-        dblur: 0,
-      };
-    }
-
-    if(type === 'foreground-pass' && event.card === cardIdx){
-      /* 前景掠过:卡片从屏幕一侧到另一侧,scale 2.5,opacity 1.0,z=+400
-         p=0 在左侧外,p=0.5 中央(峰值),p=1 右侧外
-         使用 sine curve 形成连续平滑移动
-         视觉效果:大卡片横穿镜头,短暂遮挡主图 */
-      const phase = p;  // 0..1
-      const xMove = -1400 + phase * 2800;  // -1400 → +1400(屏幕外到屏幕外)
-      const k = Math.sin(phase * Math.PI);  // 0→1→0 峰值
-      return {
-        dx: xMove,
-        dy: -80 + k * -60,  // 中央时略上升
-        dz: 400 * k,        // 峰值时 z=+400,镜头前
-        dscale: 2.0 * k,   // 峰值 scale +2.0(配合 z=+400 + perspective,实际更大)
-        drotZ: 12 * Math.cos(phase * Math.PI),  // 旋转跟随移动方向
-        dopacity: 1.0 * k - 0.2,  // 峰值 +0.8,起始/结束 -0.2(隐藏)
-        dblur: -1.0,  // 前景卡片不模糊
-      };
-    }
-
-    if(type === 'scatter'){
-      /* scatter: 所有外围卡片向外飞散(中心 card 0 不动)
-         使用 easeOut 在前 60% 时间到达峰值,后 40% 稳定
-         stagger 基于卡片 index(外围卡片先飞,中心稍后)
-         视觉效果:外围卡片明显向外散开 */
-      const stagger = cardIdx * 0.08;  // 每张卡片 stagger
-      const adjP = clamp((p - stagger) / (1 - stagger), 0, 1);
-      const k = CURVES.easeOut(adjP) * (adjP < 0.7 ? 1 : 1 - (adjP - 0.7) / 0.3 * 0.3);
-      if(cardIdx === 0) return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0, dblur:0 };
-      // 根据卡片位置决定飞散方向
-      const dirX = slot.x > 50 ? 1 : (slot.x < 50 ? -1 : 0);
-      const dirY = slot.y > 50 ? 1 : (slot.y < 50 ? -1 : 0);
-      return {
-        dx: dirX * 500 * k,    // 增加位移(原本 300 → 500)
-        dy: dirY * 350 * k,   // 增加位移(原本 200 → 350)
-        dz: -200 * k,          // 略向远处退
-        dscale: -0.4 * k,      // 缩小更多
-        drotZ: dirX * 25 * k,  // 旋转更多
-        dopacity: -0.5 * k,    // 透明度减少
-        dblur: 2.0 * k,
-      };
-    }
-
-    if(type === 'reassemble'){
-      /* reassemble: 卡片从远处回到 slot(stagger)
-         前 30% 时间散得更远(延续 scatter 状态),后 70% 时间汇聚到位
-         使用 easeInOut 形成"先散后聚"的感觉 */
-      const stagger = (NUM_CARDS - cardIdx) * 0.06;  // 反向 stagger(中心先聚,外围后聚)
-      const adjP = clamp((p - stagger) / (1 - stagger), 0, 1);
-      if(cardIdx === 0) return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0, dblur:0 };
-      // p<0.3 时偏移最大(散开),p>0.3 时偏移渐变到 0
-      const dirX = slot.x > 50 ? 1 : (slot.x < 50 ? -1 : 0);
-      const dirY = slot.y > 50 ? 1 : (slot.y < 50 ? -1 : 0);
-      let k;
-      if(adjP < 0.3){
-        k = adjP / 0.3;  // 0→1,继续散开
-      } else {
-        k = 1 - CURVES.easeInOut((adjP - 0.3) / 0.7);  // 1→0,汇聚
-      }
-      return {
-        dx: dirX * 500 * k,
-        dy: dirY * 350 * k,
-        dz: -200 * k,
-        dscale: -0.4 * k,
-        drotZ: dirX * 25 * k,
-        dopacity: -0.5 * k,
-        dblur: 2.0 * k,
-      };
-    }
-
-    if(type === 'card-fly' && event.card === cardIdx){
-      /* 卡片从远处飞到镜头前再飞走
-         p=0 远处,p=0.5 镜头前(峰值),p=1 远处
-         形成"飞过镜头"的感觉
-         视觉效果:卡片穿越摄影机,非常戏剧性 */
-      const k = Math.sin(p * Math.PI);  // 0→1→0
-      const zMove = -700 + (1 - Math.abs(p - 0.5) * 2) * 1100;  // 远(z=-700) → 近(z=+400) → 远
-      return {
-        dx: -400 * (1 - p * 2),  // 左→右移动
-        dy: 60 * k,
-        dz: zMove,
-        dscale: 1.5 * k,         // 峰值 +1.5(配合 z=+400 perspective)
-        drotZ: 15 * (p - 0.5) * 2,
-        dopacity: 1.0 * k - 0.3,
-        dblur: -1.0,
-      };
-    }
-
-    return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0, dblur:0 };
+  /* === foreground-pass === */
+  if(type === 'foreground-pass' && event.card === cardIdx){
+    const phase = p;
+    const xMove = -1400 + phase * 2800;
+    const k = Math.sin(phase * Math.PI);
+    return {
+      dx: xMove, dy: -80 + k * -60, dz: 400 * k,
+      dscale: 2.0 * k, drotZ: 12 * Math.cos(phase * Math.PI),
+      dopacity: 1.0 * k - 0.2, dblur: -1.0,
+    };
   }
 
-  /* ===================== Rack Focus(服务于 PUSH_RACK_FOCUS Shot)=====================
+  /* === foreground-cover-swap === 大卡片横穿镜头,card 3 作为遮挡 */
+  if(type === 'foreground-cover-swap'){
+    if(cardIdx !== 3) return zeroOffset();
+    const phase = p;
+    const xMove = -1200 + phase * 2400;
+    const k = Math.sin(phase * Math.PI);
+    return {
+      dx: xMove, dy: -40 + k * -50, dz: 500 * k,
+      dscale: 2.6 * k, drotZ: 10 * Math.cos(phase * Math.PI),
+      dopacity: 1.0 * k - 0.2, dblur: -1.0,
+    };
+  }
+
+  /* === scatter === */
+  if(type === 'scatter'){
+    const stagger = cardIdx * 0.08;
+    const adjP = clamp((p - stagger) / (1 - stagger), 0, 1);
+    const k = CURVES.easeOut(adjP) * (adjP < 0.7 ? 1 : 1 - (adjP - 0.7) / 0.3 * 0.3);
+    if(cardIdx === 0) return zeroOffset();
+    const dirX = slot.x > 50 ? 1 : (slot.x < 50 ? -1 : 0);
+    const dirY = slot.y > 50 ? 1 : (slot.y < 50 ? -1 : 0);
+    return {
+      dx: dirX * 500 * k, dy: dirY * 350 * k, dz: -200 * k,
+      dscale: -0.4 * k, drotZ: dirX * 25 * k,
+      dopacity: -0.5 * k, dblur: 2.0 * k,
+    };
+  }
+
+  /* === reassemble === */
+  if(type === 'reassemble'){
+    const stagger = (NUM_CARDS - cardIdx) * 0.06;
+    const adjP = clamp((p - stagger) / (1 - stagger), 0, 1);
+    if(cardIdx === 0) return zeroOffset();
+    const dirX = slot.x > 50 ? 1 : (slot.x < 50 ? -1 : 0);
+    const dirY = slot.y > 50 ? 1 : (slot.y < 50 ? -1 : 0);
+    let k;
+    if(adjP < 0.3){ k = adjP / 0.3; }
+    else { k = 1 - CURVES.easeInOut((adjP - 0.3) / 0.7); }
+    return {
+      dx: dirX * 500 * k, dy: dirY * 350 * k, dz: -200 * k,
+      dscale: -0.4 * k, drotZ: dirX * 25 * k,
+      dopacity: -0.5 * k, dblur: 2.0 * k,
+    };
+  }
+
+  /* === card-fly === */
+  if(type === 'card-fly' && event.card === cardIdx){
+    const k = Math.sin(p * Math.PI);
+    const zMove = -700 + (1 - Math.abs(p - 0.5) * 2) * 1100;
+    return {
+      dx: -400 * (1 - p * 2), dy: 60 * k, dz: zMove,
+      dscale: 1.5 * k, drotZ: 15 * (p - 0.5) * 2,
+      dopacity: 1.0 * k - 0.3, dblur: -1.0,
+    };
+  }
+
+  /* === hero-reveal === Hero 从背景向中景靠近 */
+  if(type === 'hero-reveal' && cardIdx === 0){
+    const k = CURVES.overshoot ? (() => {
+      const t = p;
+      if(t < 0.7){
+        const c = 1.70158;
+        return 1 + (c+1)*Math.pow(t/0.7-1,3) + c*Math.pow(t/0.7-1,2);
+      }
+      return 1 - (t-0.7)/0.3 * 0.04;
+    })() : CURVES.easeInOut(p);
+    return {
+      dx: 0, dy: 0, dz: -120 + k * 120, dscale: -0.10 + k * 0.14, drotZ: 0,
+      dopacity: -0.45 + k * 0.45, dblur: 0,
+    };
+  }
+
+  /* === camera-pass-hero-reveal === */
+  if(type === 'camera-pass-hero-reveal' && cardIdx === 0){
+    const k = Math.sin(p * Math.PI);
+    return { dx: 0, dy: 0, dz: 30 * k, dscale: 0.10 * k, drotZ: 0, dopacity: 0, dblur: 0 };
+  }
+
+  /* === hero-depth-enter === "总有你的存在" Hero Arrival */
+  if(type === 'hero-depth-enter' && cardIdx === 0){
+    const k = CURVES.easeInOut(p);
+    return {
+      dx: 0, dy: 0,
+      dz: -450 + k * 450,
+      dscale: -0.28 + k * 0.28,
+      drotZ: 0,
+      dopacity: -1 * (1 - k),
+      dblur: (1 - k) * 4,
+    };
+  }
+
+  /* === hero-flee === "有时也会失败" Hero 主动远离 */
+  if(type === 'hero-flee' && cardIdx === 0){
+    const k = CURVES.easeOut(p);
+    return { dx: 0, dy: 0, dz: -k * 120, dscale: -k * 0.10, drotZ: 0, dopacity: -k * 0.10, dblur: k * 1.5 };
+  }
+
+  /* === hero-recover === Afterglow Hero scale 1.035 → 1 */
+  if(type === 'hero-recover' && cardIdx === 0){
+    const k = CURVES.easeInOut(p);
+    return { dx: 0, dy: 0, dz: 0, dscale: (1 - k) * 0.035, drotZ: 0, dopacity: 0, dblur: 0 };
+  }
+
+  /* === hero-settle === "才了解所谓的爱" overshoot */
+  if(type === 'hero-settle' && cardIdx === 0){
+    const t = p;
+    const k = t < 0.5 ? (t/0.5) * 0.025 : (1 - (t-0.5)/0.5) * 0.025;
+    return { dx:0, dy:0, dz:0, dscale: k, drotZ:0, dopacity:0, dblur:0 };
+  }
+  if(type === 'hero-settle' && cardIdx !== 0){ return zeroOffset(); }
+
+  /* === hero-zoom-in === "多少天长地久" scale 1 → 1.04 → 1 */
+  if(type === 'hero-zoom-in' && cardIdx === 0){
+    const t = p;
+    const k = t < 0.6 ? (t/0.6) * 0.04 : (1 - (t-0.6)/0.4) * 0.04;
+    return { dx:0, dy:0, dz:0, dscale:k, drotZ:0, dopacity:0, dblur:0 };
+  }
+  if(type === 'hero-zoom-in' && cardIdx !== 0){
+    return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:-CURVES.easeOut(p)*0.20, dblur:CURVES.easeOut(p)*1.5 };
+  }
+
+  /* === hero-secondary === Hero 暂时成为 Midground */
+  if(type === 'hero-secondary' && cardIdx === 0){
+    const k = CURVES.easeOut(p);
+    return { dx:0, dy:0, dz:-k*30, dscale:-k*0.05, drotZ:0, dopacity:-k*0.15, dblur:k*0.8 };
+  }
+
+  /* === secondary-drift === 周围两张卡向 Hero 靠近 20-40px */
+  if(type === 'secondary-drift'){
+    if(cardIdx === 0) return zeroOffset();
+    const dirX = slot.x > 50 ? 1 : (slot.x < 50 ? -1 : 0);
+    const k = CURVES.easeOut(p);
+    return { dx:-dirX * 35 * k, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0, dblur:0 };
+  }
+
+  /* === lateral-track / lateral-balance / lateral-couple / soft-perspective-enter === */
+  if(type === 'lateral-track'){ return zeroOffset(); }
+
+  if(type === 'lateral-balance'){
+    if(cardIdx === 0) return zeroOffset();
+    const k = CURVES.easeOut(p);
+    const dirX = slot.x > 50 ? 1 : (slot.x < 50 ? -1 : 0);
+    const startX = 20 * dirX, endX = 5 * dirX;
+    return { dx:(startX + (endX - startX) * k), dy:0, dz:0, dscale:0, drotZ:0, dopacity:0, dblur:0 };
+  }
+
+  if(type === 'lateral-couple'){
+    if(cardIdx === 0) return zeroOffset();
+    const dirX = slot.x > 50 ? 1 : (slot.x < 50 ? -1 : 0);
+    const k = CURVES.easeOut(p);
+    return { dx:-dirX * 60 * k, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0, dblur:0 };
+  }
+
+  if(type === 'soft-perspective-enter' && event.card === cardIdx){
+    const curve = CURVES.easeOut;
+    const k = 1 - curve(p);
+    return { dx:300 * k, dy:0, dz:-280 * k, dscale:(0.85-1)*k, drotZ:0, dopacity:0, dblur:0 };
+  }
+
+  /* === depth-dive === 一张旧照片从极远推进到中景 */
+  if(type === 'depth-dive' && event.card === cardIdx){
+    const k = CURVES.easeInOut(p);
+    return {
+      dx: 0, dy: 0,
+      dz: -500 + k * 450,
+      dscale: -0.4 + k * 0.5,
+      drotZ: 0,
+      dopacity: -0.85 + k * 0.85,
+      dblur: (1-k) * 4,
+    };
+  }
+
+  /* === old-memory-enter === Time Rewind 时的旧照片进入(card 4) */
+  if(type === 'old-memory-enter'){
+    if(cardIdx !== 4) return zeroOffset();
+    const k = CURVES.easeOut(p);
+    return { dx:0, dy:0, dz:-400 + k * 400, dscale:-0.28 + k * 0.28, drotZ:0, dopacity:-0.85 + k * 0.85, dblur:(1-k) * 3 };
+  }
+
+  /* === time-rewind === Reverse Parallax */
+  if(type === 'time-rewind'){
+    if(cardIdx === 0){
+      const k = CURVES.easeOut(p);
+      return { dx:0, dy:0, dz:0, dscale:0.08 * k, drotZ:0, dopacity:-0.75 * k, dblur:k*1.5 };
+    }
+    const k = CURVES.easeOut(p);
+    return { dx:0, dy:0, dz:0, dscale:-0.15 * k, drotZ:0, dopacity:-0.20 * k, dblur:k*1.5 };
+  }
+
+  /* === pull-reverse-parallax === */
+  if(type === 'pull-reverse-parallax'){
+    if(cardIdx === 0) return zeroOffset();
+    const k = CURVES.easeOut(p);
+    const dirX = slot.x > 50 ? 1 : (slot.x < 50 ? -1 : 0);
+    const dirY = slot.y > 50 ? 1 : (slot.y < 50 ? -1 : 0);
+    return { dx:dirX*30*k, dy:dirY*20*k, dz:-50*k, dscale:-0.10*k, drotZ:0, dopacity:-0.10*k, dblur:k*0.8 };
+  }
+
+  /* === group-gather === 外围卡片向 Hero 靠近 */
+  if(type === 'group-gather'){
+    if(cardIdx === 0) return zeroOffset();
+    const stagger = cardIdx * (event.stagger || 120) / 1000 / (event.dur/1000);
+    const adjP = clamp((p - stagger) / (1 - stagger), 0, 1);
+    const k = CURVES.easeInOut(adjP);
+    const dirX = slot.x > 50 ? 1 : (slot.x < 50 ? -1 : 0);
+    const dirY = slot.y > 50 ? 1 : (slot.y < 50 ? -1 : 0);
+    return { dx:-dirX * 40 * k, dy:-dirY * 25 * k, dz:0, dscale:0.05 * k, drotZ:0, dopacity:0, dblur:0 };
+  }
+
+  /* === group-gather-outside === 从外侧向中心汇聚 */
+  if(type === 'group-gather-outside'){
+    if(cardIdx === 0) return zeroOffset();
+    const k = CURVES.easeOut(p);
+    const dirX = slot.x > 50 ? 1 : (slot.x < 50 ? -1 : 0);
+    const dirY = slot.y > 50 ? 1 : (slot.y < 50 ? -1 : 0);
+    return { dx:-dirX * 60 * k, dy:-dirY * 40 * k, dz:-k * 60, dscale:k * 0.05, drotZ:0, dopacity:0, dblur:0 };
+  }
+
+  /* === background-crowd === Background Cards Staggered Enter */
+  if(type === 'background-crowd'){
+    if(cardIdx < 4) return zeroOffset();
+    const staggerIdx = (cardIdx - 4);
+    const stagger = staggerIdx * (event.stagger || 100) / 1000 / (event.dur/1000);
+    const adjP = clamp((p - stagger) / (1 - stagger), 0, 1);
+    const k = CURVES.easeOut(adjP);
+    const dirX = slot.x > 50 ? 1 : (slot.x < 50 ? -1 : 0);
+    return {
+      dx: dirX * (200 + 100 * (1-k)),
+      dy: 0,
+      dz: -k * 200,
+      dscale: -0.30 * (1-k),
+      drotZ: 0,
+      dopacity: -0.7 * (1-k),
+      dblur: (1-k) * 4,
+    };
+  }
+
+  /* === focus-pull === */
+  if(type === 'focus-pull'){
+    const k = CURVES.easeInOut(p);
+    if(event.dir === 'away'){
+      if(cardIdx === 0) return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0, dblur:k*2.5 };
+      return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:-k*0.15, dblur:k*3 };
+    } else {
+      if(cardIdx === 0) return { dx:0, dy:0, dz:0, dscale:CURVES.easeOut(p)*0.025 - k*0.025, drotZ:0, dopacity:0, dblur:-k*2.5 };
+      return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:k*0.15, dblur:-k*3 };
+    }
+  }
+
+  /* === past-to-present === 旧照片从 Hero 后方进入(card 4) */
+  if(type === 'past-to-present'){
+    if(cardIdx !== 4) return zeroOffset();
+    const k = CURVES.easeInOut(p);
+    return { dx:0, dy:0, dz:-300 + k*200, dscale:-0.20 + k*0.20, drotZ:0, dopacity:-0.50+k*0.50, dblur:(1-k)*3 };
+  }
+
+  /* === memory-space-open === Background/Midground/Foreground 全部可见 */
+  if(type === 'memory-space-open'){
+    if(cardIdx === 0) return zeroOffset();
+    const k = CURVES.easeInOut(p);
+    return { dx:0, dy:0, dz:0, dscale:0.10*k, drotZ:0, dopacity:0.20*k, dblur:-k*0.8 };
+  }
+
+  /* === afterglow-memories === Afterglow 时让 card 8 从 Background 缓慢出现 */
+  if(type === 'afterglow-memories'){
+    if(cardIdx !== 8) return zeroOffset();
+    const k = CURVES.easeOut(p);
+    return { dx:0, dy:0, dz:-500 + k*250, dscale:-0.50 + k*0.40, drotZ:0, dopacity:-0.95+k*0.20, dblur:(1-k)*5 };
+  }
+
+  /* === bg-fade === 非 Hero 卡片整体降低 opacity,Hero 不动 */
+  if(type === 'bg-fade'){
+    if(cardIdx === 0) return zeroOffset();
+    const k = CURVES.easeInOut(p);
+    const amount = (event.amount || 0.10) * k;
+    const blur = (event.blur || 0) * k;
+    return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:-amount, dblur:blur };
+  }
+
+  /* === stillness-hit / lyrics-focus / micro-pull / slow-push / long-push ===
+     camera/fx-only events,card 层不偏移 */
+  if(type === 'stillness-hit' || type === 'lyrics-focus' || type === 'micro-pull' ||
+     type === 'slow-push' || type === 'long-push' || type === 'camera-pull' ||
+     type === 'final-slow-push' || type === 'afterglow-pull'){
+    return zeroOffset();
+  }
+
+  /* === 作用于 camera/fx 的事件在 card 层不产生偏移 === */
+  return zeroOffset();
+}
+
+function zeroOffset(){ return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0, dblur:0 }; }
+
+
+/* ===================== Rack Focus(服务于 PUSH_RACK_FOCUS Shot)=====================
      focusIdx (0..8) 决定哪张 card 是 sharp:
        sharp    → blur 0, opacity 1, brightness 1.05
        unfocus  → blur +, opacity 减, brightness 减(距离越远越虚)
@@ -1206,7 +1622,45 @@
       p.el.style.opacity = opacity.toFixed(3);
     });
 
-    /* 7) 歌词 */
+    /* 7) Hero Light — 跟随 Hero 卡片位置,opacity 由 hero-light 事件驱动 */
+    const heroCard = cards[0];
+    if(heroCard && dom.fx.heroLight){
+      const carouselRect = dom.carousel.getBoundingClientRect();
+      // Hero 卡片中心的视口坐标
+      const heroScreenX = carouselRect.left + carouselRect.width / 2 + heroCard.live.x;
+      const heroScreenY = carouselRect.top  + carouselRect.height / 2 + heroCard.live.y;
+      // 视口百分比
+      const vpX = (heroScreenX / window.innerWidth) * 100;
+      const vpY = (heroScreenY / window.innerHeight) * 100;
+      // 从 hero-light 事件聚合最大 opacity
+      let heroLightOp = 0;
+      let heroLightR  = 22;
+      for(const ev of activeEvents){
+        if(ev.type === 'hero-light'){
+          const k = CURVES.easeInOut(ev.p);
+          const op = (ev.op || 0.15) * k;
+          if(op > heroLightOp) heroLightOp = op;
+        }
+        if(ev.type === 'final-slow-push'){
+          // 最终歌词触发时 Hero Light 也加强
+          const k = CURVES.easeInOut(ev.p);
+          const op = 0.16 * k;
+          if(op > heroLightOp) heroLightOp = op;
+        }
+        if(ev.type === 'afterglow-pull' || ev.type === 'afterglow-memories'){
+          // Afterglow 期间 Hero Light 渐淡到 0.05
+          const k = CURVES.easeOut(ev.p);
+          const op = 0.15 * (1 - k) + 0.05 * k;
+          if(op > heroLightOp) heroLightOp = op;
+        }
+      }
+      dom.fx.heroLight.style.setProperty('--hero-x', vpX.toFixed(1));
+      dom.fx.heroLight.style.setProperty('--hero-y', vpY.toFixed(1));
+      dom.fx.heroLight.style.setProperty('--hero-r', heroLightR.toString());
+      dom.fx.heroLight.style.setProperty('--hero-op', heroLightOp.toFixed(3));
+    }
+
+    /* 8) 歌词 */
     updateLyrics(time);
 
     rafId = requestAnimationFrame(tick);
@@ -1227,9 +1681,25 @@
   }
   window.addEventListener('resize', () => { cachedRect = null; });
 
-  /* ===================== 歌词 ===================== */
+  /* ===================== 歌词 =====================
+   Director Spec V5:歌词根据 emotion 触发 5 种动画类型
+     micro         普通:opacity 0→1, translateY 8px→0
+     emotion       情绪:blur 7px→0, opacity .4→1, scale .96→1
+     key           关键:Hero Light + Camera Focus
+     time-rewind   "让那时间每一刻在倒退":Camera Pull + Reverse Parallax
+     final         最终:Hero Isolation + Soft Glow
+*/
   const lyricsData = (typeof LYRICS_DATA !== 'undefined') ? LYRICS_DATA : [];
   let currentLyricIdx = -1;
+  let currentLyricMotionType = 'micro';
+
+  /* 把 LYRIC_CUES 转成 idx → motionType 快速查询表 */
+  const lyricMotionTypeMap = (() => {
+    const m = new Map();
+    for(const cue of LYRIC_CUES){ m.set(cue.idx, cue.motionType); }
+    return m;
+  })();
+
   function updateLyrics(time){
     if(lyricsData.length === 0) return;
     let idx = 0;
@@ -1239,12 +1709,19 @@
     }
     if(idx !== currentLyricIdx){
       currentLyricIdx = idx;
-      dom.lyricsText.classList.add('fading');
-      setTimeout(() => {
-        dom.lyricsText.textContent = lyricsData[idx].text;
-        dom.lyricsText.classList.remove('fading');
-        dom.lyricsText.classList.add('show');
-      }, 380);
+      const motionType = lyricMotionTypeMap.get(idx) || 'micro';
+      currentLyricMotionType = motionType;
+      const text = lyricsData[idx].text;
+      dom.lyricsText.classList.remove('show', 'fading', 'cue-micro', 'cue-emotion', 'cue-key', 'cue-time-rewind', 'cue-final');
+      // 添加新类型(初始状态),使用 rAF 触发 show 进入下一帧
+      dom.lyricsText.textContent = '';
+      requestAnimationFrame(() => {
+        dom.lyricsText.textContent = text;
+        dom.lyricsText.classList.add('cue-' + motionType);
+        requestAnimationFrame(() => {
+          dom.lyricsText.classList.add('show');
+        });
+      });
     }
   }
 
@@ -1369,6 +1846,8 @@
 
   /* 初始化 */
   if(dom.totalTime) dom.totalTime.textContent = formatTime(getTotalDuration());
+  // 在 lyricsData 准备好后构建 EVENT_TIMELINE
+  buildEventTimeline();
   startRAF();
   window._memoriesStart = startRAF;
   window._memoriesStop  = stopRAF;
