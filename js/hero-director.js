@@ -85,28 +85,28 @@
   /* ===================== 9 个 Slot 固定布局 ====================
      每个 slot 是一个空间位置,不绑定 hero。
      卡片 (DOM) 永远占据某个 slot,但 slot 内的 photoIdx 可以换。
-       0 HERO         中心 Hero (略微偏上留空间给歌词)
-       1 FG_LEFT      左前(old hero 退场后停留)
-       2 FG_RIGHT     右前(支撑)
-       3 MG_L         左中
-       4 MG_R         右中
-       5 MG_FAR_L     左远中
-       6 MG_FAR_R     右远中
-       7 BG_L         左深后
-       8 BG_R         右深后
+     位置采用"非线性"分布:不是整齐的水平线,而是带有 depth variation + 自然错落。
 
-     注意:x 范围控制在 25%~75% 之内,避免 cards 散布到边缘。
+       0 HERO         中心 Hero (略偏上,留空间给歌词)
+       1 FG_LEFT      左前(略低,作为支撑)
+       2 FG_RIGHT     右前(略高,带旋转)
+       3 MG_L         左中(错开)
+       4 MG_R         右中(垂直错开)
+       5 MG_FAR_L     左远中
+       6 MG_FAR_R     右远中(更高,显著远)
+       7 BG_L         左深后(更左下)
+       8 BG_R         右深后(更右上)
   */
   const SLOTS = [
-    { name:'HERO',     x:50, y:46, z:0,    scale:1.00, blur:0,   opacity:1.00 },
-    { name:'FG_LEFT',  x:38, y:48, z:-160, scale:0.70, blur:0.3, opacity:0.65 },
-    { name:'FG_RIGHT', x:62, y:44, z:-160, scale:0.70, blur:0.3, opacity:0.65 },
-    { name:'MG_L',     x:32, y:42, z:-300, scale:0.50, blur:0.6, opacity:0.40 },
-    { name:'MG_R',     x:68, y:50, z:-300, scale:0.50, blur:0.6, opacity:0.40 },
-    { name:'MG_FAR_L', x:28, y:38, z:-480, scale:0.36, blur:0.9, opacity:0.24 },
-    { name:'MG_FAR_R', x:72, y:54, z:-480, scale:0.36, blur:0.9, opacity:0.24 },
-    { name:'BG_L',     x:25, y:34, z:-680, scale:0.26, blur:1.3, opacity:0.13 },
-    { name:'BG_R',     x:75, y:58, z:-680, scale:0.26, blur:1.3, opacity:0.13 },
+    { name:'HERO',     x:50, y:46, z:0,    scale:1.00, blur:0,    opacity:1.00, rotZ:0,  rotY:0 },
+    { name:'FG_LEFT',  x:36, y:50, z:-160, scale:0.62, blur:0.3,  opacity:0.55, rotZ:-4, rotY:-8 },
+    { name:'FG_RIGHT', x:64, y:42, z:-160, scale:0.62, blur:0.3,  opacity:0.55, rotZ:5,  rotY:10 },
+    { name:'MG_L',     x:24, y:38, z:-320, scale:0.44, blur:0.7,  opacity:0.32, rotZ:-7, rotY:-15 },
+    { name:'MG_R',     x:78, y:54, z:-320, scale:0.44, blur:0.7,  opacity:0.32, rotZ:8,  rotY:14 },
+    { name:'MG_FAR_L', x:18, y:62, z:-520, scale:0.30, blur:1.0,  opacity:0.18, rotZ:-10, rotY:-22 },
+    { name:'MG_FAR_R', x:82, y:30, z:-520, scale:0.30, blur:1.0,  opacity:0.18, rotZ:12, rotY:20 },
+    { name:'BG_L',     x:14, y:50, z:-720, scale:0.22, blur:1.4,  opacity:0.10, rotZ:-6, rotY:-30 },
+    { name:'BG_R',     x:86, y:50, z:-720, scale:0.22, blur:1.4,  opacity:0.10, rotZ:8,  rotY:28 },
   ];
 
   /* ===================== Handoff Presets ====================

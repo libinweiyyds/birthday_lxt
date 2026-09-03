@@ -342,7 +342,7 @@
        基础位置 = HeroDirector.SLOTS[i] (固定空间位置)
        + handoff motion (新 hero 从 origin 到 HERO 的轨迹)
        + outgoing motion (旧 hero 从 FG_LEFT 退向 BG)
-       + 极小的 breathing 微动
+       + cinematic parallax drift (背景卡片持续的微弱运动,营造电影感)
     */
     const rect = dom.carousel.getBoundingClientRect();
     const handoffMotion = (handoff)
@@ -361,6 +361,8 @@
       let scale = slotBase.scale;
       let opacity = slotBase.opacity;
       let blur = slotBase.blur;
+      let slotRotZ = slotBase.rotZ || 0;
+      let slotRotY = slotBase.rotY || 0;
 
       /* === HERO card (slot 0) ===
          在 handoff 期间,根据 handoffMotion 从 BG 推进到 HERO */
@@ -379,6 +381,7 @@
         card.target.rotY = handoffMotion.rotY || 0;
         card.target.rotX = handoffMotion.rotX || 0;
       } else {
+        // Hero 在平时保持轻微电影感旋转
         card.target.rotZ = 0;
         card.target.rotY = 0;
         card.target.rotX = 0;
@@ -403,6 +406,10 @@
         blur += outgoingMotion.blurDelta;
         card.target.rotZ = outgoingMotion.rotZ || 0;
         card.target.rotY = outgoingMotion.rotY || 0;
+      } else if(i !== 0 && i !== 1) {
+        /* 非 HERO/FG_LEFT 卡片: 应用 slot base 的 rotation + cinematic drift */
+        card.target.rotZ = slotRotZ;
+        card.target.rotY = slotRotY;
       }
 
       /* === handoff 期间,非 HERO/FG_LEFT 卡片保持 SLOTS 位置,但轻微 blur/opacity 调整 === */
@@ -417,6 +424,21 @@
         }
       }
 
+      /* === Cinematic Parallax Drift ===
+         每张背景卡片(非 Hero/FG_LEFT)持续做微弱的视差漂浮:
+           - 振幅根据 z 深度调制:越远越弱
+           - 频率不同(基于 card index 的 seed)避免同步
+           - 与 camera live 联动创造"镜头漂移"感
+      */
+      let driftX = 0, driftY = 0, driftRZ = 0;
+      if(i !== 0 && i !== 1 && !handoff){
+        const phaseBase = i * 1.137;
+        const depthFactor = clamp(1 + slotBase.z / 500, 0.2, 1.4);
+        driftX = Math.sin(t * 0.13 + phaseBase) * 6 * depthFactor;
+        driftY = Math.cos(t * 0.11 + phaseBase * 0.7) * 4 * depthFactor;
+        driftRZ = Math.sin(t * 0.07 + phaseBase * 1.3) * 0.8 * depthFactor;
+      }
+
       /* 极轻微 breathing — 不随机旋转,只在 hero 处允许 ±1.5px scale breathing */
       let breathX = 0, breathY = 0;
       if(i === 0){
@@ -425,12 +447,14 @@
       }
 
       /* 写入 target */
-      const targetX = px + breathX - camLive.x * 0.4;
-      const targetY = py + breathY - camLive.y * 0.4;
+      const targetX = px + driftX + breathX - camLive.x * 0.4;
+      const targetY = py + driftY + breathY - camLive.y * 0.4;
       const targetZ = pz - camLive.z * 0.3;
       card.target.x = targetX;
       card.target.y = targetY;
       card.target.z = targetZ;
+      card.target.rotZ = (card.target.rotZ || 0) + driftRZ;
+
       // Hero 卡片适度大小,配角更小(让 Hero 不会巨大铺满)
       if(i === 0){
         card.target.w = 480;
@@ -439,8 +463,12 @@
         card.target.w = 360;
         card.target.h = 450;
       } else {
-        card.target.w = 280;
-        card.target.h = 350;
+        // 配角根据 z 深度计算尺寸:越远越小
+        const baseW = 280;
+        const baseH = 350;
+        const zFactor = clamp(1 + slotBase.z / 400, 0.5, 1.0);
+        card.target.w = baseW * zFactor;
+        card.target.h = baseH * zFactor;
       }
       card.target.scale = scale;
       card.target.blur = blur;
