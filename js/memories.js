@@ -354,15 +354,30 @@
       const slotBase = window.HeroDirector.SLOTS[i];
       const card = cards[i];
 
+      /* Composition modifier — 当前 hero photo 决定整个场景 archetype
+         不同的 archetype 给同样的 slot 完全不同的视觉位置/可见性 */
+      const heroPhotoIdx = scene.photoForSlot[0];
+      const heroComposition = window.HeroDirector.getPhotoComposition(heroPhotoIdx);
+      const compMod = window.HeroDirector.getCompositionModifiers(heroComposition, slotBase.name);
+
       /* Slot 像素位置 */
       let px = (slotBase.x - 50) / 100 * rect.width;
       let py = (slotBase.y - 50) / 100 * rect.height;
       let pz = slotBase.z;
-      let scale = slotBase.scale;
-      let opacity = slotBase.opacity;
+      let scale = slotBase.scale * compMod.scaleMul;
+      let opacity = slotBase.opacity * compMod.visibility;
       let blur = slotBase.blur;
-      let slotRotZ = slotBase.rotZ || 0;
-      let slotRotY = slotBase.rotY || 0;
+      let slotRotZ = (slotBase.rotZ || 0) + (compMod.rotOffset?.z || 0);
+      let slotRotY = (slotBase.rotY || 0) + (compMod.rotOffset?.y || 0);
+      let slotRotX = (slotBase.rotX || 0) + (compMod.rotOffset?.x || 0);
+
+      /* composition 调整 slot 位置 */
+      px *= compMod.posMul.x;
+      py *= compMod.posMul.y;
+      pz *= compMod.posMul.z;
+
+      /* 如果 composition 完全隐藏这个 slot,跳过详细 transform 计算 */
+      const isHidden = (compMod.visibility <= 0.05 && !handoff);
 
       /* === HERO card (slot 0) ===
          在 handoff 期间,根据 handoffMotion 从 BG 推进到 HERO */

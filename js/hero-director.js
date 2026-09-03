@@ -338,6 +338,122 @@
   const photoOffY = new Map();  // y 偏移(像素)
   const photoScaleDelta = new Map();
   const photoBlurDelta = new Map();
+
+  /* Per-photo COMPOSITION — 每张 hero photo 关联一个独特的 "scene archetype"
+     不同的 archetype 决定:
+       - 哪些 slot 被填充(有些 archetype 只用 5 张卡,有些用 9 张)
+       - 每个 slot 的 偏移倍数(让有些 archetype 把卡片推得更远/更近)
+       - 整体 rotation tendency(整体偏左倾/右倾/正)
+     这样每次 hero 变化时,即使 slot 不变,场景感觉也不同。
+   */
+  const COMPOSITION_TYPES = [
+    'lone-hero',         // Hero 独自,几乎没有配角(适合安静 verse)
+    'memory-crowd',     // 7-8 张环绕 Hero(适合高潮)
+    'vertical-stack',   // 卡片垂直堆叠在 Hero 旁
+    'horizontal-band',  // 卡片在水平线
+    'diagonal-flow',    // 卡片沿对角线分布
+    'scatter-radial',   // 卡片从 Hero 向外放射
+    'cluster-left',     // 大部分卡片聚集在 Hero 左侧
+    'cluster-right',    // 大部分卡片聚集在 Hero 右侧
+    'float-above',      // 卡片主要在 Hero 上方(留出下方空间)
+    'sink-below',       // 卡片主要在 Hero 下方
+  ];
+
+  const photoComposition = new Map();  // photoIdx → composition type
+  const compositionRng = mulberry32(SCENE_SEED ^ 0xC0FFEE);
+
+  function getPhotoComposition(photoIdx){
+    if(!photoComposition.has(photoIdx)){
+      const idx = Math.floor(compositionRng() * COMPOSITION_TYPES.length);
+      photoComposition.set(photoIdx, COMPOSITION_TYPES[idx]);
+    }
+    return photoComposition.get(photoIdx);
+  }
+
+  /* 根据 composition type 返回 slot 修饰参数 */
+  function getCompositionModifiers(compType, slotName){
+    const mod = {
+      // 默认:全部正常显示
+      visibility: 1.0,
+      scaleMul: 1.0,
+      posMul: { x: 1.0, y: 1.0, z: 1.0 },
+      rotOffset: { x: 0, y: 0, z: 0 },
+      breathMul: 1.0,
+    };
+    switch(compType){
+      case 'lone-hero':
+        // 只有 Hero + 1 张 FG,其他全隐藏
+        if(slotName === 'HERO') mod.posMul = { x: 1.0, y: 0.95, z: 1.0 };
+        else if(slotName === 'FG_NEARMID') mod.visibility = 0.7;
+        else mod.visibility = 0;
+        break;
+      case 'memory-crowd':
+        // 全部可见,稍微缩小一点
+        mod.scaleMul = 0.9;
+        if(slotName === 'BG_FARLEFT' || slotName === 'BG_FARRIGHT') mod.scaleMul = 1.2;
+        break;
+      case 'vertical-stack':
+        // 卡片在 Hero 上下堆叠
+        if(slotName === 'MG_TOPLEFT' || slotName === 'BG_TOP'){
+          mod.posMul = { x: 1.2, y: 0.7, z: 1.0 };
+          mod.visibility = 1.2;
+        }
+        if(slotName === 'FG_BOTTOM' || slotName === 'MG_BOTRIGHT'){
+          mod.posMul = { x: 1.0, y: 1.3, z: 1.0 };
+          mod.visibility = 1.2;
+        }
+        // 隐藏左右两侧
+        if(slotName === 'FG_NEARMID' || slotName === 'FG_FARRIGHT') mod.visibility = 0.4;
+        break;
+      case 'horizontal-band':
+        if(slotName === 'BG_TOP') mod.visibility = 0;
+        if(slotName === 'FG_BOTTOM') mod.visibility = 0;
+        mod.posMul = { x: 1.1, y: 1.0, z: 1.0 };
+        break;
+      case 'diagonal-flow':
+        mod.rotOffset = { x: 0, y: 0, z: 0 };
+        if(slotName.includes('TOP')) mod.rotOffset.z = -3;
+        if(slotName.includes('BOT')) mod.rotOffset.z = 3;
+        break;
+      case 'scatter-radial':
+        mod.posMul = { x: 1.4, y: 1.4, z: 1.0 };
+        mod.scaleMul = 0.85;
+        break;
+      case 'cluster-left':
+        if(slotName === 'FG_FARRIGHT' || slotName === 'BG_FARRIGHT' || slotName === 'MG_BOTRIGHT'){
+          mod.visibility = 0;
+        }
+        if(slotName === 'FG_NEARMID' || slotName === 'MG_TOPLEFT'){
+          mod.posMul = { x: 0.7, y: 1.0, z: 1.0 };
+        }
+        break;
+      case 'cluster-right':
+        if(slotName === 'FG_NEARMID' || slotName === 'BG_FARLEFT' || slotName === 'MG_TOPLEFT'){
+          mod.visibility = 0;
+        }
+        if(slotName === 'FG_FARRIGHT' || slotName === 'MG_BOTRIGHT'){
+          mod.posMul = { x: 0.7, y: 1.0, z: 1.0 };
+        }
+        break;
+      case 'float-above':
+        if(slotName === 'FG_BOTTOM' || slotName === 'MG_BOTRIGHT' || slotName === 'BG_FARLEFT'){
+          mod.visibility = 0.3;
+        }
+        if(slotName === 'BG_TOP' || slotName === 'MG_TOPLEFT'){
+          mod.posMul = { x: 1.0, y: 0.85, z: 1.0 };
+        }
+        break;
+      case 'sink-below':
+        if(slotName === 'BG_TOP' || slotName === 'MG_TOPLEFT' || slotName === 'FG_FARRIGHT'){
+          mod.visibility = 0.3;
+        }
+        if(slotName === 'FG_BOTTOM' || slotName === 'MG_BOTRIGHT'){
+          mod.posMul = { x: 1.0, y: 1.1, z: 1.0 };
+        }
+        break;
+    }
+    return mod;
+  }
   function buildInitialScene(pool){
     // 初始场景: 选 9 张不同 photo,slot 0 = pool.pickNextHero
     const arr = [];
@@ -579,10 +695,13 @@
     PRESET_NAMES,
     HANDOFFS,
     HANDOFF_DURATION,
+    COMPOSITION_TYPES,
     getSceneState,
     getHandoffMotionForCard,
     getOutgoingMotion,
     getPhotoRotOffset,
     getPhotoSignature,
+    getPhotoComposition,
+    getCompositionModifiers,
   };
 })();
