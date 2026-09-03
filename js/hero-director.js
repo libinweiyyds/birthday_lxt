@@ -86,32 +86,42 @@
      每个 slot 是一个空间位置,不绑定 hero。
      卡片 (DOM) 永远占据某个 slot,但 slot 内的 photoIdx 可以换。
 
-     设计原则:
-       - 三个深度层(FG/MG/BG),每层多个卡形成"簇"
-       - Hero 周围有 FG 簇支撑(可能部分重叠 Hero 增加 depth)
-       - FG_RIGHT 略高于 FG_LEFT,创造 dynamic asymmetry
-       - MG/BG 卡片按"摄影构图"分布:引导线、留白、三分法
+     设计原则(电影镜头构图):
+       - 非对称布局:不是左右镜像,而是 diagonal leading lines
+       - 三层 FG 群(前景深度):FG1 在 Hero 左下强遮挡,FG2 在 Hero 右上,FG3 在 Hero 右下
+       - 中景两簇:左上 cluster + 右下 cluster,引导视线从角落到 Hero
+       - 远景三张:角落 + 顶部,营造空间深度
+       - 强烈 z 差距:FG z=+80~+180(遮挡 Hero),MG z=-280~-380,BG z=-540~-780
 
-       0  HERO        中心 Hero
-       1  FG_LEFT     紧邻 Hero 左下(部分重叠)
-       2  FG_RIGHT    Hero 右侧上方(部分重叠,带 3D 旋转)
-       3  FG_CENTER_L Hero 紧下方(遮挡底层)
-       4  MG_L        Hero 左前(引导线 1)
-       5  MG_R        Hero 右下(引导线 2)
-       6  BG_L        左深后(留白区域)
-       7  BG_R        右深后(更远处)
-       8  BG_TOP      Hero 正上方远处(构图平衡)
+       0  HERO          中心,略带偏离
+       1  FG_NEARMID    Hero 左前遮挡(z=+180,最靠近镜头)
+       2  FG_FARRIGHT   Hero 右上(z=+120,带强 3D 倾斜)
+       3  FG_BOTTOM     Hero 下方遮挡(z=+80)
+       4  MG_TOPLEFT    左上 cluster 引导线起点
+       5  MG_BOTRIGHT   右下 cluster 引导线终点
+       6  BG_FARLEFT    深后左,rotY -28 强烈 3D
+       7  BG_FARRIGHT   深后右,rotY +25
+       8  BG_TOP        Hero 正上方远处(平衡构图)
   */
   const SLOTS = [
-    { name:'HERO',       x:50, y:48, z:0,    scale:1.00, blur:0,    opacity:1.00, rotZ:0,   rotY:0 },
-    { name:'FG_LEFT',    x:35, y:55, z:120,  scale:0.70, blur:0,    opacity:0.85, rotZ:-5,  rotY:-10 },
-    { name:'FG_RIGHT',   x:66, y:38, z:140,  scale:0.65, blur:0,    opacity:0.80, rotZ:6,   rotY:12 },
-    { name:'FG_BOTTOM',  x:50, y:75, z:100,  scale:0.58, blur:0.2,  opacity:0.65, rotZ:-3,  rotY:0 },
-    { name:'MG_L',       x:22, y:36, z:-280, scale:0.46, blur:0.6,  opacity:0.42, rotZ:-8,  rotY:-18 },
-    { name:'MG_R',       x:80, y:62, z:-280, scale:0.46, blur:0.6,  opacity:0.42, rotZ:9,   rotY:16 },
-    { name:'BG_L',       x:10, y:48, z:-540, scale:0.32, blur:1.0,  opacity:0.22, rotZ:-7,  rotY:-25 },
-    { name:'BG_R',       x:90, y:42, z:-540, scale:0.32, blur:1.0,  opacity:0.22, rotZ:10,  rotY:22 },
-    { name:'BG_TOP',     x:55, y:14, z:-680, scale:0.24, blur:1.3,  opacity:0.14, rotZ:-2,  rotY:0 },
+    // HERO 略微偏左下(45,52),给 FG_FARRIGHT 更多空间
+    { name:'HERO',       x:46, y:50, z:0,    scale:0.95, blur:0,    opacity:1.00, rotZ:0,   rotY:0 },
+    // FG1: 强前景遮挡,在 Hero 左前方,3D 透视明显
+    { name:'FG_NEARMID', x:32, y:55, z:180,  scale:0.72, blur:0,    opacity:0.92, rotZ:-7,  rotY:-18 },
+    // FG2: Hero 右上,带 z=+120 推进 + rotY +18 的强 3D 透视
+    { name:'FG_FARRIGHT',x:72, y:32, z:120,  scale:0.62, blur:0,    opacity:0.78, rotZ:8,   rotY:18 },
+    // FG3: Hero 正下方前景,遮挡底层
+    { name:'FG_BOTTOM',  x:55, y:78, z:90,   scale:0.55, blur:0.1,  opacity:0.70, rotZ:-2,  rotY:0 },
+    // MG_TOPLEFT: 左上 cluster,引导线起点
+    { name:'MG_TOPLEFT', x:14, y:24, z:-320,scale:0.42, blur:0.6,  opacity:0.38, rotZ:-12, rotY:-22 },
+    // MG_BOTRIGHT: 右下 cluster,与 MG_TOPLEFT 形成对角线
+    { name:'MG_BOTRIGHT',x:85, y:72, z:-380,scale:0.40, blur:0.6,  opacity:0.36, rotZ:14,  rotY:24 },
+    // BG_FARLEFT: 深后左,rotY -28 强烈 3D 透视
+    { name:'BG_FARLEFT', x:6,  y:62, z:-620,scale:0.28, blur:1.2,  opacity:0.18, rotZ:-9,  rotY:-30 },
+    // BG_FARRIGHT: 深后右,rotY +25
+    { name:'BG_FARRIGHT',x:92, y:30, z:-640,scale:0.26, blur:1.3,  opacity:0.16, rotZ:11,  rotY:26 },
+    // BG_TOP: 顶部,rotY 中性,提供"上方空间"让 Hero 呼吸
+    { name:'BG_TOP',     x:60, y:8,  z:-720,scale:0.22, blur:1.4,  opacity:0.12, rotZ:-3,  rotY:0 },
   ];
 
   /* ===================== Handoff Presets ====================
@@ -320,10 +330,14 @@
 
   /* 找到当前 handoff(基于 audioTime) */
   let scenePhotoIndices = null;
-  /* Per-photo rotation offsets — 每个 photo 永远有一个固定的 rotation "signature"
-     让不同照片有不同视觉气质(有些偏左,有些偏右,有些正) */
+  /* Per-photo visual signature(rotation + 微位置 + 微 scale)
+     让每张照片有独特视觉气质,避免"机器重复"感 */
   const photoRotZ = new Map();
   const photoRotY = new Map();
+  const photoOffX = new Map();  // x 偏移(像素)
+  const photoOffY = new Map();  // y 偏移(像素)
+  const photoScaleDelta = new Map();
+  const photoBlurDelta = new Map();
   function buildInitialScene(pool){
     // 初始场景: 选 9 张不同 photo,slot 0 = pool.pickNextHero
     const arr = [];
@@ -335,30 +349,48 @@
       arr.push(idx); used.add(idx);
     }
     pool.setScene(arr);
-    // 为每张照片生成固定的 rotation signature(基于 photoIdx 的 hash)
-    for(const idx of arr){
-      if(!photoRotZ.has(idx)){
-        // hash from idx: 给出 [-8, +8] 度的稳定 rotZ
-        const h = ((idx * 0x9E3779B9) >>> 0) / 0xFFFFFFFF;
-        photoRotZ.set(idx, (h - 0.5) * 16);
-        photoRotY.set(idx, (h - 0.5) * 24);
-      }
-    }
+    // 为每张照片生成固定的 visual signature
+    for(const idx of arr) ensurePhotoSignature(idx);
     return arr;
   }
 
-  /* 在 handoff 后为新加入的照片生成 rotation signature */
-  function ensurePhotoRotation(photoIdx){
+  /* 为 photoIdx 生成/获取固定的 visual signature */
+  function ensurePhotoSignature(photoIdx){
     if(!photoRotZ.has(photoIdx)){
-      const h = ((photoIdx * 0x9E3779B9 + 17) >>> 0) / 0xFFFFFFFF;
-      photoRotZ.set(photoIdx, (h - 0.5) * 14);
-      photoRotY.set(photoIdx, (h - 0.5) * 20);
+      // 多个独立的 hash,基于 photoIdx
+      const h1 = ((photoIdx * 0x9E3779B9) >>> 0) / 0xFFFFFFFF;
+      const h2 = ((photoIdx * 0x6F4D8B17) >>> 0) / 0xFFFFFFFF;
+      const h3 = ((photoIdx * 0xC2B2AE35 + 7) >>> 0) / 0xFFFFFFFF;
+      const h4 = ((photoIdx * 0xA3C59AC7 + 13) >>> 0) / 0xFFFFFFFF;
+      // rotation: 不同照片不同倾斜
+      photoRotZ.set(photoIdx, (h1 - 0.5) * 16);   // [-8, +8]
+      photoRotY.set(photoIdx, (h2 - 0.5) * 22);   // [-11, +11]
+      // position micro-offset: ±30px(让相同 slot 内的照片不重叠)
+      photoOffX.set(photoIdx, (h3 - 0.5) * 60);
+      photoOffY.set(photoIdx, (h4 - 0.5) * 50);
+      // scale 微妙变化: ±0.04
+      photoScaleDelta.set(photoIdx, (h1 - 0.5) * 0.08);
+      // blur 微妙变化: ±0.15
+      photoBlurDelta.set(photoIdx, Math.abs(h2 - 0.5) * 0.3);
     }
   }
 
-  /* 公共 API: 获取某张照片的 rotation signature */
+  /* 公共 API: 获取某张照片的完整 visual signature */
+  function getPhotoSignature(photoIdx){
+    ensurePhotoSignature(photoIdx);
+    return {
+      rotZ: photoRotZ.get(photoIdx),
+      rotY: photoRotY.get(photoIdx),
+      offX: photoOffX.get(photoIdx),
+      offY: photoOffY.get(photoIdx),
+      scaleDelta: photoScaleDelta.get(photoIdx),
+      blurDelta: photoBlurDelta.get(photoIdx),
+    };
+  }
+
+  /* 兼容旧 API */
   function getPhotoRotOffset(photoIdx){
-    ensurePhotoRotation(photoIdx);
+    ensurePhotoSignature(photoIdx);
     return { rotZ: photoRotZ.get(photoIdx), rotY: photoRotY.get(photoIdx) };
   }
 
@@ -413,6 +445,8 @@
         const excludeSet = new Set(scenePhotoIndices);
         const next = pool.pickNextHero(excludeSet);
         pool._incomingMap.set(incomingKey, next);
+        // 为新 hero 生成 visual signature
+        ensurePhotoSignature(next);
       }
       incomingHeroIdx = pool._incomingMap.get(incomingKey);
     }
@@ -447,8 +481,8 @@
         const supportSlots = others.slice(0, 7);
         scenePhotoIndices = [newHeroIdx, oldHeroIdx, ...supportSlots];
         pool.setScene(scenePhotoIndices);
-        // 为新加入的照片生成 rotation signature
-        for(const idx of scenePhotoIndices) ensurePhotoRotation(idx);
+        // 为新加入的照片生成 visual signature
+        for(const idx of scenePhotoIndices) ensurePhotoSignature(idx);
       }
     }
 
@@ -507,30 +541,30 @@
     const k = sceneState.outgoingProgress;
 
     if(cardSlotName === 'FG_LEFT'){
-      // FG_LEFT base is now (35, 55), so to put card at center we need +0.15 x, -0.07 y
+      // FG_LEFT base is now (32, 55, rotY=-18), so to put card at center we need +0.18 x, -0.05 y
       if(k < 0.5){
         const kk = k / 0.5;
         return {
-          dxRatio: lerp(0.15, 0, kk),
-          dyRatio: lerp(-0.07, 0, kk),
-          dz: lerp(-120, 0, kk),
-          scaleDelta: lerp(0, -0.30, kk),
+          dxRatio: lerp(0.18, 0, kk),
+          dyRatio: lerp(-0.05, 0, kk),
+          dz: lerp(-180, 0, kk),  // 从 z=+180 退到 z=0
+          scaleDelta: lerp(0, -0.25, kk),
           opacityDelta: lerp(0, -0.30, kk),
           blurDelta: lerp(0, 0.4, kk),
           rotZ: lerp(0, -12, kk),
-          rotY: lerp(0, -20, kk),
+          rotY: lerp(0, -22, kk),
         };
       } else {
         const kk = (k - 0.5) / 0.5;
         return {
-          dxRatio: lerp(0, -0.40, kk),
-          dyRatio: lerp(0, 0.22, kk),
-          dz: lerp(0, 250, kk),
-          scaleDelta: lerp(-0.30, -0.55, kk),
+          dxRatio: lerp(0, -0.45, kk),
+          dyRatio: lerp(0, 0.25, kk),
+          dz: lerp(0, 280, kk),
+          scaleDelta: lerp(-0.25, -0.55, kk),
           opacityDelta: lerp(-0.30, -0.85, kk),
           blurDelta: lerp(0.4, 1.8, kk),
           rotZ: lerp(-12, -25, kk),
-          rotY: lerp(-20, -45, kk),
+          rotY: lerp(-22, -45, kk),
         };
       }
     }
@@ -549,5 +583,6 @@
     getHandoffMotionForCard,
     getOutgoingMotion,
     getPhotoRotOffset,
+    getPhotoSignature,
   };
 })();

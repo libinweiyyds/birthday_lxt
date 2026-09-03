@@ -408,17 +408,19 @@
         card.target.rotY = outgoingMotion.rotY || 0;
       } else if(i === 0 && !handoff){
         // Hero 在平时也用 photo signature (轻微的)
-        const heroOffset = window.HeroDirector.getPhotoRotOffset(scene.photoForSlot[0]);
+        const heroOffset = window.HeroDirector.getPhotoSignature(scene.photoForSlot[0]);
         card.target.rotZ = (heroOffset.rotZ || 0) * 0.3;
         card.target.rotY = (heroOffset.rotY || 0) * 0.3;
+        // Hero 也接收微位置偏移(±10px)
+        card.target.rotX = 0;  // 重置 rotX(会被下面 line 加上 drift)
       } else if(i !== 0 && i !== 1) {
         /* 非 HERO/FG_LEFT 卡片: 应用 slot base 的 rotation + photo signature + cinematic drift */
         const photoForThisSlot = (i === 1)
           ? scene.photoForSlot[1]
           : scene.photoForSlot[i];
-        const photoOffset = window.HeroDirector.getPhotoRotOffset(photoForThisSlot);
-        card.target.rotZ = slotRotZ + (photoOffset.rotZ || 0);
-        card.target.rotY = slotRotY + (photoOffset.rotY || 0);
+        const photoSig = window.HeroDirector.getPhotoSignature(photoForThisSlot);
+        card.target.rotZ = slotRotZ + (photoSig.rotZ || 0);
+        card.target.rotY = slotRotY + (photoSig.rotY || 0);
       }
 
       /* === handoff 期间,非 HERO/FG_LEFT 卡片保持 SLOTS 位置,但轻微 blur/opacity 调整 === */
@@ -440,6 +442,19 @@
            - 营造"群体记忆在空间中缓缓飘动"的感觉
       */
       let driftX = 0, driftY = 0, driftRZ = 0;
+      let photoOffX = 0, photoOffY = 0, photoScaleD = 0, photoBlurD = 0;
+      // 所有非 hero/FG_LEFT 卡片(无论 handoff 与否)接收 photo signature 的微位置
+      if(i !== 0 && i !== 1){
+        const photoForSig = (i === 1)
+          ? scene.photoForSlot[1]
+          : scene.photoForSlot[i];
+        const photoSig = window.HeroDirector.getPhotoSignature(photoForSig);
+        // 微位置: 让相同 slot 内的不同照片真正错开(避免重叠)
+        photoOffX = photoSig.offX || 0;
+        photoOffY = photoSig.offY || 0;
+        photoScaleD = photoSig.scaleDelta || 0;
+        photoBlurD = photoSig.blurDelta || 0;
+      }
       if(i !== 0 && i !== 1 && !handoff){
         // cluster base freq (BG 卡慢,FG 卡略快)
         const clusterFreq = (slotBase.z < -500) ? 0.08 : (slotBase.z < -200 ? 0.11 : 0.15);
@@ -462,8 +477,8 @@
       }
 
       /* 写入 target */
-      const targetX = px + driftX + breathX - camLive.x * 0.4;
-      const targetY = py + driftY + breathY - camLive.y * 0.4;
+      const targetX = px + driftX + breathX + photoOffX - camLive.x * 0.4;
+      const targetY = py + driftY + breathY + photoOffY - camLive.y * 0.4;
       const targetZ = pz - camLive.z * 0.3;
       card.target.x = targetX;
       card.target.y = targetY;
@@ -491,8 +506,8 @@
         card.target.w = baseW * zFactor;
         card.target.h = baseH * zFactor;
       }
-      card.target.scale = scale;
-      card.target.blur = blur;
+      card.target.scale = scale + photoScaleD;
+      card.target.blur = blur + photoBlurD;
       card.target.opacity = opacity;
       card.target.brightness = (i === 0 ? 1.05 : (i === 1 || i === 2 || i === 3 ? 0.92 : 0.78));
       card.target.saturate = (i === 0 ? 1.05 : 0.95);
