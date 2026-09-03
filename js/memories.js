@@ -1399,9 +1399,18 @@ function zeroOffset(){ return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0,
   const fxOpacity = {};
   Object.keys(dom.fx).forEach(k => fxOpacity[k] = 0);
 
-  /* photo 同步:每张卡片绑定一个 photoOffset(相对于 active 的偏移) */
+  /* V7: photo 同步 — 每张 DOM card 显示 slotPhotoIdx[i] 决定的 photoIdx
+     不再固定 slot 0 = active,而是 HeroDirector 决定每张 card 该显示哪张照片 */
+  function syncCardPhotosFromScene(slotPhotoIdx){
+    cards.forEach((c, i) => {
+      const photoIdx = slotPhotoIdx[i];
+      const src = getPhotoSrc(photoIdx);
+      setCardImage(c, src);
+    });
+  }
+
+  /* 兼容旧 API:seek 时仍可手动设 hero */
   function syncCardPhotos(activeIdx){
-    // slot 0 = active, slot 1,2 = ±1, slot 3,4 = ±2, slot 5,6 = ±3, slot 7,8 = ±4
     const offsets = [0,-1,1,-2,2,-3,3,-4,4];
     cards.forEach((c, i) => {
       const photoIdx = clamp(activeIdx + offsets[i], 0, (typeof NUM_PHOTOS !== 'undefined' ? NUM_PHOTOS : 42) - 1);
@@ -1409,6 +1418,11 @@ function zeroOffset(){ return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0,
       setCardImage(c, src);
       c.photoOffset = offsets[i];
     });
+  }
+
+  /* V7: 用 NUM_PHOTOS 重建 HeroDirector timeline */
+  if(window.HeroDirector && typeof NUM_PHOTOS !== 'undefined'){
+    window.HeroDirector.rebuildRotationTimeline(NUM_PHOTOS);
   }
 
   function tick(now){
@@ -1490,45 +1504,56 @@ function zeroOffset(){ return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0,
         ` scale(${camLive.scale.toFixed(4)})`;
     }
 
-    /* 5) Photo:每张 card
-       卡片只做"服务于相机"的小幅 parallax:
-         - camera.x 移动时,近卡反向位移大、远卡位移小
-         - camera.z 推进时,近卡 z 跟随变化更大(产生过镜头效果)
-         - camera.scale 由 .camera-rig 的 scale 统一处理,这里不再额外 scale
-         - 卡片不自身旋转
-       parallax factor:z=0 时 = 1(完全跟随),z=-700 时 = 0.1(几乎不动) */
-    const activeIdx = getCurrentPhotoIndex();
-    syncCardPhotos(activeIdx);
+    /* V7: Scene State — HeroDirector 决定 slot layout 和 photoIdx 分配
+     旧 fromStage.slots / toStage.slots 系统被替换为 HeroDirector.SLOTS
+     但保留 StageMorph 让 cardVisual / fx / typography 仍按时间切换 */
+    const sceneState = window.HeroDirector.getSceneState(time);
+
+    /* 同步每张 DOM card 显示 sceneState.slotPhotoIdx[i] 决定的照片 */
+    syncCardPhotosFromScene(sceneState.slotPhotoIdx);
 
     /* 焦点(仅 PUSH_RACK_FOCUS Shot 用,其他 Shot focusIdx 不存在,所有 card 都 sharp) */
     const focusIdx = shotResult.focusIdx;
 
-    /* 当前活跃事件 — 在 Shot 之上叠加一次性事件编舞(card-enter/foreground-pass/scatter/reassemble) */
+    /* 当前活跃事件 — 在 Shot 之上叠加一次性事件编舞 */
     const activeEvents = getActiveEvents(time);
 
+    /* V7: HeroRotation 状态(决定新 hero 推进 / 旧 hero 退场) */
+    const rotation = sceneState.rotation;
+    const rotationMot = (rotation && rotation.active)
+      ? window.HeroDirector.getSlotMotionForRotation(rotation, 0, 'HERO', time)
+      : null;
+
     cards.forEach((c, i) => {
+      /* V7: 用 HeroDirector.SLOTS[i] 决定基础 slot(x, y, z, scale, blur, opacity) */
+      const baseSlot = window.HeroDirector.SLOTS[i];
+      /* 与原 STAGE 系统 blend:cardVisual / typography 仍由 stage 决定 */
       const slotA = fromStage.slots[i];
       const slotB = toStage.slots[i];
-      const slot  = {
-        x: lerp(slotA.x, slotB.x, morphT),
-        y: lerp(slotA.y, slotB.y, morphT),
-        z: lerp(slotA.z, slotB.z, morphT),
+      const stageMorph = (slotA && slotB) ? {
         w: lerp(slotA.w, slotB.w, morphT),
         h: lerp(slotA.h, slotB.h, morphT),
         rotX: lerp(slotA.rotX, slotB.rotX, morphT),
-        rotY: lerp(slotA.rotY, slotB.rotY, morphT),
-        rotZ: lerp(slotA.rotZ, slotB.rotZ, morphT),
-        scale: lerp(slotA.scale, slotB.scale, morphT),
-        blur: lerp(slotA.blur, slotB.blur, morphT),
-        opacity: lerp(slotA.opacity, slotB.opacity, morphT),
         brightness: lerp(slotA.brightness, slotB.brightness, morphT),
         saturate: lerp(slotA.saturate, slotB.saturate, morphT),
+      } : { w: baseSlot.scale * 350, h: baseSlot.scale * 460, rotX: 0, brightness: 1.05, saturate: 1.10 };
+      const slot  = {
+        x: baseSlot.x,
+        y: baseSlot.y,
+        z: baseSlot.z,
+        w: stageMorph.w,
+        h: stageMorph.h,
+        rotX: stageMorph.rotX,
+        rotY: 0,
+        rotZ: 0,
+        scale: baseSlot.scale,
+        blur: baseSlot.blur,
+        opacity: baseSlot.opacity,
+        brightness: stageMorph.brightness,
+        saturate: stageMorph.saturate,
       };
 
-      /* Parallax factor:基于卡片 z 深度
-         z = 0 时 factor = 1(完全跟随相机)
-         z = -700 时 factor = 0.1(几乎不动)
-         z = +80(前景遮挡)时 factor = 1.5(更快掠过) */
+      /* Parallax factor:基于卡片 z 深度 */
       const parallaxFactor = clamp(1 + slot.z / 500, 0.1, 1.5);
 
       /* 视觉 CSS 变量(只主图显示 cardVisual) */
@@ -1542,7 +1567,9 @@ function zeroOffset(){ return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0,
         imgFilter: applyImageTreatment(morphT < 0.5 ? fromStage.imgTreatment : toStage.imgTreatment,
                        morphT < 0.5 ? cvA.imgFilter : cvB.imgFilter),
       };
-      if(i === 0){
+      /* V7: is-main 跟随 HeroDirector 的 slot 名 */
+      const isMainNow = (baseSlot.name === 'HERO');
+      if(isMainNow){
         c.el.style.setProperty('--card-bg', cv.bg);
         c.el.style.setProperty('--card-border', cv.border);
         c.el.style.setProperty('--card-shadow', cv.shadow);
@@ -1582,8 +1609,32 @@ function zeroOffset(){ return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0,
         evOff.dblur   += off.dblur;
       }
 
-      /* V6: Ambient Motion — 永远存在的微动(保证没有 >2 秒完全静止)
-         基于 audioTime + cardIndex seed,幅度随 Z depth 缩放 */
+      /* V7: HeroRotation 偏移 — 新 hero 推进 / 旧 hero 退场 */
+      let rotOff = { dx:0, dy:0, dz:0, dscale:0, drotZ:0, drotY:0, dopacity:0, dblur:0 };
+      if(rotationMot && i === 0 && isMainNow){
+        // 当前 slot 是 HERO 且 rotation 进行中 → 新 hero 接收 preset motion
+        rotOff.dx = rotationMot.dx;
+        rotOff.dy = rotationMot.dy;
+        rotOff.dz = rotationMot.dz;
+        rotOff.dscale = rotationMot.dscale;
+        rotOff.drotZ = rotationMot.drotZ;
+        rotOff.drotY = rotationMot.drotY || 0;
+        rotOff.dopacity = rotationMot.dopacity;
+        rotOff.dblur = rotationMot.dblur;
+      } else if(rotation && rotation.active){
+        // FG_LEFT = 退场 hero
+        if(baseSlot.name === 'FG_LEFT' && rotation.fromIdx !== null && rotation.fromIdx !== rotation.toIdx){
+          const op = (1 - rotation.progress);
+          rotOff.dx = lerp(0, -25, 1 - op);
+          rotOff.dz = lerp(0, -200, 1 - op);
+          rotOff.dscale = lerp(0, -0.15, 1 - op);
+          rotOff.drotZ = lerp(0, -8, 1 - op);
+          rotOff.dopacity = lerp(0, -0.20, 1 - op);
+          rotOff.dblur = lerp(0, 1.5, 1 - op);
+        }
+      }
+
+      /* V6: Ambient Motion — 永远存在的微动 */
       const ambOff = window.MotionScheduler.getAmbientForCard(i, time, slot.z);
       const microCard = microFx.cardOffs[i];
 
@@ -1594,23 +1645,18 @@ function zeroOffset(){ return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0,
         heroZOff = microFx.heroOff.z;
       }
 
-      /* 卡片只做服务于相机的 parallax + Ambient + Micro + Event 叠加:
-         - camera.x 移动时,近卡反向位移大、远卡位移小
-         - camera.y 同理
-         - camera.z 推进时,卡片 z 也跟随调整(近卡更敏感)
-         - Ambient 微动保证画面永远活着
-         - 事件偏移是 Key Event 一次性曲线 */
-      const targetX = px - camLive.x * parallaxFactor + ambOff.dx + microCard.dx + evOff.dx;
-      const targetY = py - camLive.y * parallaxFactor + ambOff.dy + microCard.dy + evOff.dy;
-      const targetZ = slot.z + camLive.z * parallaxFactor * 0.3 + ambOff.dz + microCard.dz + evOff.dz + (i === 0 ? heroZOff : 0);
-      const rotX = slot.rotX;  // 不动
-      const rotY = slot.rotY;
-      const rotZ = slot.rotZ + ambOff.drotZ + microCard.drotZ + evOff.drotZ;
-      const blur = clamp(slot.blur + focus.blur + ambOff.dblur + microCard.dblur + evOff.dblur, 0, 2.5);
+      /* V7: 卡片 transform = slot + parallax + ambient + micro + event + rotation */
+      const targetX = px - camLive.x * parallaxFactor + ambOff.dx + microCard.dx + evOff.dx + rotOff.dx;
+      const targetY = py - camLive.y * parallaxFactor + ambOff.dy + microCard.dy + evOff.dy + rotOff.dy;
+      const targetZ = slot.z + camLive.z * parallaxFactor * 0.3 + ambOff.dz + microCard.dz + evOff.dz + rotOff.dz + (i === 0 ? heroZOff : 0);
+      const rotX = slot.rotX;
+      const rotY = (slot.rotY || 0) + rotOff.drotY;
+      const rotZ = (slot.rotZ || 0) + ambOff.drotZ + microCard.drotZ + evOff.drotZ + rotOff.drotZ;
+      const blur = clamp(slot.blur + focus.blur + ambOff.dblur + microCard.dblur + evOff.dblur + rotOff.dblur, 0, 2.5);
       const brightness = slot.brightness * focus.brightness;
       const saturate = slot.saturate * focus.saturate;
-      const targetScale = Math.max(0.1, slot.scale + ambOff.dscale + microCard.dscale + evOff.dscale + (i === 0 ? heroScaleOff : 0));
-      const targetOpacity = clamp(slot.opacity + evOff.dopacity, 0, 1);
+      const targetScale = Math.max(0.1, slot.scale + ambOff.dscale + microCard.dscale + evOff.dscale + rotOff.dscale + (i === 0 ? heroScaleOff : 0));
+      const targetOpacity = clamp(slot.opacity + evOff.dopacity + rotOff.dopacity, 0, 1);
 
       /* 实时 lerp */
       const lambda = 6.0;
