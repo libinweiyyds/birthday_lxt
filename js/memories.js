@@ -406,10 +406,19 @@
         blur += outgoingMotion.blurDelta;
         card.target.rotZ = outgoingMotion.rotZ || 0;
         card.target.rotY = outgoingMotion.rotY || 0;
+      } else if(i === 0 && !handoff){
+        // Hero 在平时也用 photo signature (轻微的)
+        const heroOffset = window.HeroDirector.getPhotoRotOffset(scene.photoForSlot[0]);
+        card.target.rotZ = (heroOffset.rotZ || 0) * 0.3;
+        card.target.rotY = (heroOffset.rotY || 0) * 0.3;
       } else if(i !== 0 && i !== 1) {
-        /* 非 HERO/FG_LEFT 卡片: 应用 slot base 的 rotation + cinematic drift */
-        card.target.rotZ = slotRotZ;
-        card.target.rotY = slotRotY;
+        /* 非 HERO/FG_LEFT 卡片: 应用 slot base 的 rotation + photo signature + cinematic drift */
+        const photoForThisSlot = (i === 1)
+          ? scene.photoForSlot[1]
+          : scene.photoForSlot[i];
+        const photoOffset = window.HeroDirector.getPhotoRotOffset(photoForThisSlot);
+        card.target.rotZ = slotRotZ + (photoOffset.rotZ || 0);
+        card.target.rotY = slotRotY + (photoOffset.rotY || 0);
       }
 
       /* === handoff 期间,非 HERO/FG_LEFT 卡片保持 SLOTS 位置,但轻微 blur/opacity 调整 === */
@@ -426,17 +435,23 @@
 
       /* === Cinematic Parallax Drift ===
          每张背景卡片(非 Hero/FG_LEFT)持续做微弱的视差漂浮:
-           - 振幅根据 z 深度调制:越远越弱
-           - 频率不同(基于 card index 的 seed)避免同步
-           - 与 camera live 联动创造"镜头漂移"感
+           - 按 depth cluster (BG > MG > FG > Hero) 分组振幅
+           - 同一 cluster 内卡片有 phase offset 但频率相同
+           - 营造"群体记忆在空间中缓缓飘动"的感觉
       */
       let driftX = 0, driftY = 0, driftRZ = 0;
       if(i !== 0 && i !== 1 && !handoff){
-        const phaseBase = i * 1.137;
-        const depthFactor = clamp(1 + slotBase.z / 500, 0.2, 1.4);
-        driftX = Math.sin(t * 0.13 + phaseBase) * 6 * depthFactor;
-        driftY = Math.cos(t * 0.11 + phaseBase * 0.7) * 4 * depthFactor;
-        driftRZ = Math.sin(t * 0.07 + phaseBase * 1.3) * 0.8 * depthFactor;
+        // cluster base freq (BG 卡慢,FG 卡略快)
+        const clusterFreq = (slotBase.z < -500) ? 0.08 : (slotBase.z < -200 ? 0.11 : 0.15);
+        // phase 用 card index 偏移避免完全同步
+        const phaseBase = i * 0.83;
+        // depth-modulated 振幅:越远越弱
+        const depthFactor = clamp(1 + slotBase.z / 500, 0.15, 1.4);
+        // 用 sin 的二次方制造 "缓慢漂浮" 而非 "规律摆动"
+        const wave = Math.sin(t * clusterFreq + phaseBase);
+        driftX = wave * 5 * depthFactor;
+        driftY = Math.cos(t * clusterFreq * 0.7 + phaseBase * 0.6) * 3 * depthFactor;
+        driftRZ = Math.sin(t * clusterFreq * 0.5 + phaseBase * 1.3) * 0.5 * depthFactor;
       }
 
       /* 极轻微 breathing — 不随机旋转,只在 hero 处允许 ±1.5px scale breathing */
@@ -457,23 +472,29 @@
 
       // Hero 卡片适度大小,配角更小(让 Hero 不会巨大铺满)
       if(i === 0){
-        card.target.w = 480;
-        card.target.h = 600;
+        // Hero — 中等尺寸,留出 breathing room
+        card.target.w = 440;
+        card.target.h = 560;
       } else if(i === 1 || i === 2){
-        card.target.w = 360;
-        card.target.h = 450;
+        // FG_LEFT / FG_RIGHT — 前层,稍大,但不能盖过 Hero
+        card.target.w = 340;
+        card.target.h = 420;
+      } else if(i === 3){
+        // FG_BOTTOM — 前层遮挡,更窄
+        card.target.w = 280;
+        card.target.h = 360;
       } else {
-        // 配角根据 z 深度计算尺寸:越远越小
-        const baseW = 280;
-        const baseH = 350;
-        const zFactor = clamp(1 + slotBase.z / 400, 0.5, 1.0);
+        // MG/BG — 根据 z 深度计算尺寸:越远越小
+        const baseW = 260;
+        const baseH = 330;
+        const zFactor = clamp(1 + slotBase.z / 350, 0.45, 1.0);
         card.target.w = baseW * zFactor;
         card.target.h = baseH * zFactor;
       }
       card.target.scale = scale;
       card.target.blur = blur;
       card.target.opacity = opacity;
-      card.target.brightness = (i === 0 ? 1.05 : (i === 1 || i === 2 ? 0.92 : 0.78));
+      card.target.brightness = (i === 0 ? 1.05 : (i === 1 || i === 2 || i === 3 ? 0.92 : 0.78));
       card.target.saturate = (i === 0 ? 1.05 : 0.95);
 
       /* Lerp live → target */
