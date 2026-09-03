@@ -206,8 +206,8 @@
       };
     },
     'stillness': (p, t) => ({
-      x: Math.sin(t*0.04)*1.5,
-      y: Math.sin(t*0.05)*1,
+      x: Math.sin(t*0.04)*0.6,   // 降低 ambient 振幅 (之前 1.5)
+      y: Math.sin(t*0.05)*0.4,
       z: 0, rotX: 0, rotY: 0, scale: 1,
     }),
     '__none': (p, t) => ({ x:0, y:0, z:0, rotX:0, rotY:0, scale:1 }),
@@ -318,8 +318,15 @@
       const tone = handoff.camera || 'stillness';
       const shotFn = CAMERA_SHOTS[tone] || CAMERA_SHOTS.stillness;
       camTarget = shotFn(handoff._progress, t);
+    } else if(time < 6){
+      // INTRO 期间:相机几乎不动,只有极轻微的 ambient
+      camTarget = {
+        x: Math.sin(t*0.03)*0.5,
+        y: Math.cos(t*0.04)*0.3,
+        z: 0, rotX: 0, rotY: 0, scale: 1,
+      };
     } else {
-      // 平时 ambient breathing
+      // 平时 ambient breathing(克制版)
       camTarget = CAMERA_SHOTS.stillness(0, t);
     }
 
@@ -491,7 +498,7 @@
           ? scene.photoForSlot[1]
           : scene.photoForSlot[i];
         const photoSig = window.HeroDirector.getPhotoSignature(photoForSig);
-        // 微位置: 让相同 slot 内的不同照片真正错开(避免重叠)
+        // 微位置:让相同 slot 内的不同照片真正错开(避免重叠)
         photoOffX = photoSig.offX || 0;
         photoOffY = photoSig.offY || 0;
         photoScaleD = photoSig.scaleDelta || 0;
@@ -506,16 +513,25 @@
         const depthFactor = clamp(1 + slotBase.z / 500, 0.15, 1.4);
         // 用 sin 的二次方制造 "缓慢漂浮" 而非 "规律摆动"
         const wave = Math.sin(t * clusterFreq + phaseBase);
-        driftX = wave * 5 * depthFactor;
-        driftY = Math.cos(t * clusterFreq * 0.7 + phaseBase * 0.6) * 3 * depthFactor;
-        driftRZ = Math.sin(t * clusterFreq * 0.5 + phaseBase * 1.3) * 0.5 * depthFactor;
+        // INTRO 期间 (0-6s) 大幅降低 drift — 让卡片 fade in 后保持"站立"感,不立即开始运动
+        // INTRO 后也保持克制: 用 0.25 系数(整体更安静)
+        let driftAmpMul = 0.25;
+        if(time < 6){
+          // INTRO: 卡片几乎不动 (只有 reveal 时的浮入)
+          driftAmpMul = 0;
+        }
+        driftX = wave * 5 * depthFactor * driftAmpMul;
+        driftY = Math.cos(t * clusterFreq * 0.7 + phaseBase * 0.6) * 3 * depthFactor * driftAmpMul;
+        driftRZ = Math.sin(t * clusterFreq * 0.5 + phaseBase * 1.3) * 0.5 * depthFactor * driftAmpMul;
       }
 
       /* 极轻微 breathing — 不随机旋转,只在 hero 处允许 ±1.5px scale breathing */
       let breathX = 0, breathY = 0;
       if(i === 0){
-        breathX = Math.sin(t*0.4) * 1.2;
-        breathY = Math.cos(t*0.5) * 0.8;
+        // INTRO 期间 hero 也基本静止
+        const breathMul = time < 6 ? 0.2 : 1.0;
+        breathX = Math.sin(t*0.4) * 1.2 * breathMul;
+        breathY = Math.cos(t*0.5) * 0.8 * breathMul;
       }
 
       /* 写入 target */
