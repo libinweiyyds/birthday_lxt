@@ -687,6 +687,34 @@
     return null;
   }
 
+  /* ===================== getIntroReveal ====================
+     Staggered intro reveal — 在 0~6s 内,让每张 slot 以不同延迟 fade in
+
+     每个 slot 的延迟 = i * 0.45s (slot 越远越晚出现)
+     在 delay 之前: opacity = 0, scale = 0.3 (几乎不见)
+     在 delay 之后: 1.2s 内平滑过渡到完整
+
+     这样开场不会"全部卡片同时 boom 进来",
+     而是"一张一张被镜头发现"
+     6s 完成所有卡片,刚好衔接第一个 handoff(t=8)
+   */
+  const INTRO_START = 0;
+  const INTRO_DURATION = 6;
+  const INTRO_PER_CARD_DELAY = 0.45;
+  const INTRO_REVEAL_TIME = 1.2;
+
+  function getIntroReveal(slotIdx, time){
+    if(time > INTRO_DURATION) return 1.0;  // 全部 reveal 完成
+    // Hero (slot 0) 在 t=0 立即出现(不需要 staggered reveal — 用户已经点击 intro 进入)
+    if(slotIdx === 0) return 1.0;
+    // 其他 slot 用 i 索引作为延迟
+    const delay = (slotIdx - 1) * INTRO_PER_CARD_DELAY + 0.4;
+    const elapsed = time - delay;
+    if(elapsed <= 0) return 0;
+    if(elapsed >= INTRO_REVEAL_TIME) return 1.0;
+    return smoothstep(elapsed / INTRO_REVEAL_TIME);
+  }
+
   /* ===================== Public API ==================== */
   window.HeroDirector = {
     SCENE_SEED,
@@ -696,6 +724,10 @@
     HANDOFFS,
     HANDOFF_DURATION,
     COMPOSITION_TYPES,
+    INTRO_START,
+    INTRO_DURATION,
+    INTRO_PER_CARD_DELAY,
+    INTRO_REVEAL_TIME,
     getSceneState,
     getHandoffMotionForCard,
     getOutgoingMotion,
@@ -703,5 +735,6 @@
     getPhotoSignature,
     getPhotoComposition,
     getCompositionModifiers,
+    getIntroReveal,
   };
 })();

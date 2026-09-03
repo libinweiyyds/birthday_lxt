@@ -360,12 +360,31 @@
       const heroComposition = window.HeroDirector.getPhotoComposition(heroPhotoIdx);
       const compMod = window.HeroDirector.getCompositionModifiers(heroComposition, slotBase.name);
 
+      /* INTRO Staggered Reveal — 开场时,每张 slot 以不同延迟 fade in
+         这样用户进入页面后,卡片是"一张一张被发现",不是"全部一起 boom"
+         handoff 期间忽略(因为已经在动了) */
+      let introFactor = 1.0;
+      if(!handoff && time < window.HeroDirector.INTRO_DURATION){
+        introFactor = window.HeroDirector.getIntroReveal(i, time);
+        // introFactor 0→1 范围内,opacity 跟随,scale 从 0.3 渐变到 1
+      }
+
+      /* INTRO 期间强制让所有 card 可见(忽略 composition 的 visibility=0 隐藏)
+         确保开场时是"丰富场景"而不是"只有 Hero 孤独"
+         在 INTRO_DURATION 之后,compMod.visibility 才生效 */
+      let effectiveVisibility = compMod.visibility;
+      if(time < window.HeroDirector.INTRO_DURATION){
+        effectiveVisibility = Math.max(compMod.visibility, 0.4);  // INTRO 期间每张卡至少 0.4 opacity
+      }
+
       /* Slot 像素位置 */
       let px = (slotBase.x - 50) / 100 * rect.width;
       let py = (slotBase.y - 50) / 100 * rect.height;
       let pz = slotBase.z;
-      let scale = slotBase.scale * compMod.scaleMul;
-      let opacity = slotBase.opacity * compMod.visibility;
+      // intro reveal: scale 从 0.3 渐变到 1
+      const introScale = introFactor === 1.0 ? 1.0 : (0.3 + 0.7 * introFactor);
+      let scale = slotBase.scale * compMod.scaleMul * introScale;
+      let opacity = slotBase.opacity * effectiveVisibility * introFactor;
       let blur = slotBase.blur;
       let slotRotZ = (slotBase.rotZ || 0) + (compMod.rotOffset?.z || 0);
       let slotRotY = (slotBase.rotY || 0) + (compMod.rotOffset?.y || 0);
@@ -375,6 +394,14 @@
       px *= compMod.posMul.x;
       py *= compMod.posMul.y;
       pz *= compMod.posMul.z;
+
+      /* intro reveal: 让未出现的卡片从更深 BG/远处开始,
+         用更深的 z + 微旋转让 fade in 有"从深处浮现"的感觉 */
+      if(introFactor < 1.0){
+        pz -= 300 * (1 - introFactor);  // 没出现的卡片 z 推得更远
+        // 出现时附带的轻微"镜头发现"微抖
+        slotRotZ += Math.sin(introFactor * Math.PI) * 6;  // 中点时 +6度抖动
+      }
 
       /* 如果 composition 完全隐藏这个 slot,跳过详细 transform 计算 */
       const isHidden = (compMod.visibility <= 0.05 && !handoff);
