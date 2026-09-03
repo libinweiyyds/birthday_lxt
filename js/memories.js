@@ -1349,21 +1349,25 @@ function zeroOffset(){ return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0,
   /* ===================== 粒子(Layer 2) ===================== */
   const MAX_PARTICLES = 12;
   const particles = [];
+  /* V6: seeded random(粒子初始状态由 seed 决定,Seek 一致) */
+  const particleRng = window.MotionScheduler.mulberry32(window.MotionScheduler.SCENE_SEED ^ 0x917321);
   function initParticles(){
     for(let i=0;i<MAX_PARTICLES;i++){
       const p = document.createElement('div');
       p.className = 'ambient-particle';
-      p.style.width = (2 + Math.random()*3) + 'px';
+      const w = (2 + particleRng()*3);
+      p.style.width = w + 'px';
       p.style.height = p.style.width;
       p.style.opacity = '0';
       dom.layerParts.appendChild(p);
       particles.push({
         el:p,
-        x: Math.random()*100,
-        y: Math.random()*100,
-        vx: (Math.random()-0.5)*0.02,
-        vy: (Math.random()-0.5)*0.02 - 0.005,
-        phase: Math.random()*TAU,
+        x: particleRng()*100,
+        y: particleRng()*100,
+        vx: (particleRng()-0.5)*0.02,
+        vy: (particleRng()-0.5)*0.02 - 0.005,
+        phase: particleRng()*TAU,
+        w,
       });
     }
   }
@@ -1453,7 +1457,23 @@ function zeroOffset(){ return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0,
     const shotState = getShotState(time);
     const shotFn = SHOTS[shotState.shot] || SHOTS.ESTABLISHING;
     const shotResult = shotFn(shotState.progress, t, {});
-    const targetCam = shotResult.cam;
+    const shotCam = shotResult.cam;
+
+    /* V6: Ambient + Micro Motion 叠加在 Shot Camera 之上
+       Ambient Camera:永远存在,避免 >2 秒完全静止 */
+    const phaseState = window.MotionScheduler.getPhaseState(time);
+    const ambientCam = window.MotionScheduler.getAmbientCamera(time, phaseState.density);
+    const activeMicro = window.MotionScheduler.getActiveMicroEvents(time);
+    const microFx = window.MotionScheduler.getMicroEffects(activeMicro, time, NUM_CARDS);
+
+    const targetCam = {
+      x:     shotCam.x     + ambientCam.x     + microFx.cameraOff.x,
+      y:     shotCam.y     + ambientCam.y     + microFx.cameraOff.y,
+      z:     shotCam.z     + ambientCam.z     + microFx.cameraOff.z,
+      rotX:  shotCam.rotX  + ambientCam.rotX  + microFx.cameraOff.rotX,
+      rotY:  shotCam.rotY  + ambientCam.rotY  + microFx.cameraOff.rotY,
+      scale: shotCam.scale + ambientCam.scale + microFx.cameraOff.scale,
+    };
 
     /* Camera 平滑插值 — Shot 切换时 camLive 不会突变,形成 MATCH MOTION */
     camLive.x     = lerp(camLive.x,     targetCam.x,     damp(1.5, dt));
@@ -1562,21 +1582,34 @@ function zeroOffset(){ return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0,
         evOff.dblur   += off.dblur;
       }
 
-      /* 卡片只做服务于相机的 parallax + 事件叠加:
+      /* V6: Ambient Motion — 永远存在的微动(保证没有 >2 秒完全静止)
+         基于 audioTime + cardIndex seed,幅度随 Z depth 缩放 */
+      const ambOff = window.MotionScheduler.getAmbientForCard(i, time, slot.z);
+      const microCard = microFx.cardOffs[i];
+
+      /* Hero(i==0)叠加 microFx.heroOff */
+      let heroScaleOff = 0, heroZOff = 0;
+      if(i === 0){
+        heroScaleOff = microFx.heroOff.scale;
+        heroZOff = microFx.heroOff.z;
+      }
+
+      /* 卡片只做服务于相机的 parallax + Ambient + Micro + Event 叠加:
          - camera.x 移动时,近卡反向位移大、远卡位移小
          - camera.y 同理
          - camera.z 推进时,卡片 z 也跟随调整(近卡更敏感)
-         - 事件偏移直接加到 target 上(参与 lerp,平滑过渡) */
-      const targetX = px - camLive.x * parallaxFactor + evOff.dx;
-      const targetY = py - camLive.y * parallaxFactor + evOff.dy;
-      const targetZ = slot.z + camLive.z * parallaxFactor * 0.3 + evOff.dz;
+         - Ambient 微动保证画面永远活着
+         - 事件偏移是 Key Event 一次性曲线 */
+      const targetX = px - camLive.x * parallaxFactor + ambOff.dx + microCard.dx + evOff.dx;
+      const targetY = py - camLive.y * parallaxFactor + ambOff.dy + microCard.dy + evOff.dy;
+      const targetZ = slot.z + camLive.z * parallaxFactor * 0.3 + ambOff.dz + microCard.dz + evOff.dz + (i === 0 ? heroZOff : 0);
       const rotX = slot.rotX;  // 不动
       const rotY = slot.rotY;
-      const rotZ = slot.rotZ + evOff.drotZ;
-      const blur = clamp(slot.blur + focus.blur + evOff.dblur, 0, 2.5);
+      const rotZ = slot.rotZ + ambOff.drotZ + microCard.drotZ + evOff.drotZ;
+      const blur = clamp(slot.blur + focus.blur + ambOff.dblur + microCard.dblur + evOff.dblur, 0, 2.5);
       const brightness = slot.brightness * focus.brightness;
       const saturate = slot.saturate * focus.saturate;
-      const targetScale = Math.max(0.1, slot.scale + evOff.dscale);  // 事件可改 scale
+      const targetScale = Math.max(0.1, slot.scale + ambOff.dscale + microCard.dscale + evOff.dscale + (i === 0 ? heroScaleOff : 0));
       const targetOpacity = clamp(slot.opacity + evOff.dopacity, 0, 1);
 
       /* 实时 lerp */
@@ -1599,9 +1632,10 @@ function zeroOffset(){ return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0,
       /* 写入 DOM */
       c.el.style.width  = L.w.toFixed(1) + 'px';
       c.el.style.height = L.h.toFixed(1) + 'px';
+      /* V6: transform 保留 3 位小数,让微动可见(否则 toFixed(2) 会把 <0.005px 截掉) */
       c.el.style.transform =
         `translate3d(-50%, -50%, 0)` +
-        ` translate3d(${L.x.toFixed(2)}px, ${L.y.toFixed(2)}px, ${L.z.toFixed(2)}px)` +
+        ` translate3d(${L.x.toFixed(3)}px, ${L.y.toFixed(3)}px, ${L.z.toFixed(3)}px)` +
         ` rotateX(${L.rotX.toFixed(3)}deg) rotateY(${L.rotY.toFixed(3)}deg) rotateZ(${L.rotZ.toFixed(3)}deg)` +
         ` scale(${L.scale.toFixed(4)})`;
       c.el.style.opacity = L.opacity.toFixed(3);
@@ -1622,7 +1656,7 @@ function zeroOffset(){ return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0,
       p.el.style.opacity = opacity.toFixed(3);
     });
 
-    /* 7) Hero Light — 跟随 Hero 卡片位置,opacity 由 hero-light 事件驱动 */
+    /* 7) Hero Light — 跟随 Hero 卡片位置,opacity 由 hero-light 事件驱动 + Ambient breathing */
     const heroCard = cards[0];
     if(heroCard && dom.fx.heroLight){
       const carouselRect = dom.carousel.getBoundingClientRect();
@@ -1632,9 +1666,11 @@ function zeroOffset(){ return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0,
       // 视口百分比
       const vpX = (heroScreenX / window.innerWidth) * 100;
       const vpY = (heroScreenY / window.innerHeight) * 100;
-      // 从 hero-light 事件聚合最大 opacity
-      let heroLightOp = 0;
-      let heroLightR  = 22;
+      // V6: Ambient Hero Light breathing — 永远存在
+      const ambLight = window.MotionScheduler.getAmbientHeroLight(time);
+      let heroLightOp = ambLight.op;
+      let heroLightR  = ambLight.r;
+      // Key events 叠加
       for(const ev of activeEvents){
         if(ev.type === 'hero-light'){
           const k = CURVES.easeInOut(ev.p);
@@ -1789,16 +1825,25 @@ function zeroOffset(){ return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0,
     if(currentVinylIdx >= 0) set.add(currentVinylIdx);
     return set;
   }
-  function swapVinyl(){
-    const forbid = forbidSet();
+  /* V6: vinyl swap 用 seeded RNG + 调用次数计数保证确定性 */
+  const vinylRng = window.MotionScheduler.mulberry32(window.MotionScheduler.SCENE_SEED ^ 0x1B05);
+  let vinylSwapCount = 0;
+  function nextVinylIdx(forbid){
+    const total = (typeof NUM_PHOTOS !== 'undefined' ? NUM_PHOTOS : 42);
     let idx;
     let attempts = 0;
     do {
-      idx = Math.floor(Math.random() * (typeof NUM_PHOTOS !== 'undefined' ? NUM_PHOTOS : 42));
+      idx = Math.floor(vinylRng() * total);
       attempts++;
     } while(forbid.has(idx) && attempts < 50);
-    if(forbid.has(idx)) return;
+    return forbid.has(idx) ? -1 : idx;
+  }
+  function swapVinyl(){
+    const forbid = forbidSet();
+    const idx = nextVinylIdx(forbid);
+    if(idx < 0) return;
     currentVinylIdx = idx;
+    vinylSwapCount++;
     dom.diskCover.style.opacity = '0';
     dom.diskCover.style.transform = 'scale(0.92)';
     setTimeout(() => {
@@ -1810,8 +1855,8 @@ function zeroOffset(){ return { dx:0, dy:0, dz:0, dscale:0, drotZ:0, dopacity:0,
   function startVinylSwap(){
     if(currentVinylIdx < 0){
       const forbid = forbidSet();
-      let idx = Math.floor(Math.random() * (typeof NUM_PHOTOS !== 'undefined' ? NUM_PHOTOS : 42));
-      while(forbid.has(idx)) idx = Math.floor(Math.random() * (typeof NUM_PHOTOS !== 'undefined' ? NUM_PHOTOS : 42));
+      const idx = nextVinylIdx(forbid);
+      if(idx < 0) return;
       currentVinylIdx = idx;
       dom.diskCover.src = getPhotoSrc(idx);
     }
