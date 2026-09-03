@@ -111,115 +111,151 @@
 
   /* ===================== Handoff Presets ====================
      每个 preset 定义新 hero 从哪个 slot 出发,以什么轨迹接管。
-     调用:preset(p) → { fromSlot, dx, dy, dz, scale, rotZ, blur, life }
+     调用:preset(p) → { fromSlot, dx, dy, dz, scale, rotZ, rotY, blur, life }
        p: 0..1 handoff 进度
        返回的偏移叠加到 HERO slot 的目标位置之上
 
-     6 种 preset,每种有不同"叙事签名":
-       depth       从 BG 深处直接推向 HERO
-       lateral-L   从左后方斜推入
-       lateral-R   从右后方斜推入
-       cross       新 hero 从对侧穿越 + 旧 hero 同时退到 FG_LEFT
-       push        Camera 推进 + 新 hero 推进 + 旧 hero 后退
-       camera-find Camera 先移动寻找,新 hero 浮现
+     8 种 preset,每种都有真正的"飞入/推入/穿越"动作:
+       depth       从 BG 深处快速推向 HERO(大幅 z 推进)
+       lateral-L   从屏幕左侧大幅滑入(120vw → 0)
+       lateral-R   从屏幕右侧大幅滑入
+       fly-top     从屏幕上方飞入(高 y 偏移)
+       fly-bottom  从屏幕下方飞入
+       cross       从右侧穿越到中心,中段短暂经过前景
+       push        推进 hero (Camera 同时推进)
+       camera-find Camera 先寻找,hero 从 BG 浮现
   */
   const PRESETS = {
+    /* depth — 从 BG 深处向 HERO 推进,大 z 距离 */
     'depth': (p) => {
-      // 0..0.3 从 BG_R 浮现;0.3..0.85 推进到 HERO;0.85..1 settle
-      const pre  = p < 0.30 ? smoothstep(p / 0.30) : 1;
-      const main = clamp((p - 0.30) / 0.55, 0, 1);
+      const pre  = p < 0.20 ? smoothstep(p / 0.20) : 1;
+      const main = clamp((p - 0.20) / 0.60, 0, 1);
       const settle = p > 0.85 ? smoothstep((p - 0.85) / 0.15) : 1;
+      // easeInOut cubic for smooth cinematic motion
+      const k = main < 0.5 ? 4*main*main*main : 1 - Math.pow(-2*main+2, 3)/2;
       return {
         fromSlot:'BG_R',
-        fromZ:-680, fromScale:0.36, fromOpacity:0.16, fromBlur:1.4,
-        dx: lerp(30, 0, main),
-        dy: lerp(15, 0, main),
-        dz: lerp(-680, 0, main),
-        scaleDelta: lerp(0.36, 1.0, main) - 1.0,
-        rotZ: lerp(8, 0, main),
-        blur: lerp(1.4, 0, main),
-        opacity: lerp(0.16, 1.0, pre) * settle,
+        dx: lerp(40, 0, k),
+        dy: lerp(20, 0, k),
+        dz: lerp(-1100, 0, k),
+        scaleDelta: lerp(0.30, 1.0, k) - 1.0,
+        rotZ: lerp(12, 0, k),
+        rotY: lerp(-15, 0, k),
+        blur: lerp(2.0, 0, k),
+        opacity: lerp(0.0, 1.0, pre) * settle,
       };
     },
+    /* lateral-L — 从屏幕左侧外大幅飞入 */
     'lateral-L': (p) => {
-      const main = smoothstep(clamp((p - 0.20) / 0.65, 0, 1));
+      const main = smoothstep(clamp((p - 0.15) / 0.70, 0, 1));
+      const early = smoothstep(clamp(p / 0.25, 0, 1));
       return {
         fromSlot:'MG_FAR_L',
-        fromZ:-480, fromScale:0.48, fromOpacity:0.28, fromBlur:1.0,
-        dx: lerp(-40, 0, main),
-        dy: lerp(10, 0, main),
-        dz: lerp(-480, 0, main),
-        scaleDelta: lerp(0.48, 1.0, main) - 1.0,
-        rotZ: lerp(-6, 0, main),
-        rotY: lerp(-10, 0, main),
-        blur: lerp(1.0, 0, main),
-        opacity: smoothstep(clamp(p / 0.25, 0, 1)),
-      };
-    },
-    'lateral-R': (p) => {
-      const main = smoothstep(clamp((p - 0.20) / 0.65, 0, 1));
-      return {
-        fromSlot:'MG_FAR_R',
-        fromZ:-480, fromScale:0.48, fromOpacity:0.28, fromBlur:1.0,
-        dx: lerp(40, 0, main),
-        dy: lerp(-10, 0, main),
-        dz: lerp(-480, 0, main),
-        scaleDelta: lerp(0.48, 1.0, main) - 1.0,
-        rotZ: lerp(6, 0, main),
-        rotY: lerp(10, 0, main),
-        blur: lerp(1.0, 0, main),
-        opacity: smoothstep(clamp(p / 0.25, 0, 1)),
-      };
-    },
-    'cross': (p) => {
-      // 新 hero 从右侧穿越到中心,中段经过中心偏前(z=+60 短暂前景)
-      const main = clamp((p - 0.20) / 0.60, 0, 1);
-      const early = clamp(p / 0.20, 0, 1);
-      const arcZ = Math.sin(main * Math.PI) * 80;
-      return {
-        fromSlot:'MG_R',
-        fromZ:-300, fromScale:0.62, fromOpacity:0.45, fromBlur:0.7,
-        dx: lerp(35, 0, main),
-        dy: lerp(-12, 0, main),
-        dz: lerp(-300, 0, main) + arcZ,
-        scaleDelta: lerp(0.62, 1.05, main) * (main > 0.85 ? lerp(1.05, 1.0, (main-0.85)/0.15) : 1) - 1.0,
-        rotZ: lerp(10, 0, main),
-        rotY: lerp(15, 0, main),
-        blur: lerp(0.7, 0, main),
+        dx: lerp(-1400, 0, main),  // 从屏幕外左侧飞入
+        dy: lerp(80, 0, main),
+        dz: lerp(-200, 0, main),
+        scaleDelta: lerp(0.65, 1.0, main) - 1.0,
+        rotZ: lerp(-15, 0, main),
+        rotY: lerp(-25, 0, main),
+        blur: lerp(1.5, 0, main),
         opacity: early,
       };
     },
-    'push': (p) => {
-      // Camera 与新 hero 同时推进;新 hero 从 BG 直接推到近景
-      const main = smoothstep(clamp((p - 0.10) / 0.70, 0, 1));
-      const early = clamp(p / 0.20, 0, 1);
+    /* lateral-R — 从屏幕右侧外大幅飞入 */
+    'lateral-R': (p) => {
+      const main = smoothstep(clamp((p - 0.15) / 0.70, 0, 1));
+      const early = smoothstep(clamp(p / 0.25, 0, 1));
+      return {
+        fromSlot:'MG_FAR_R',
+        dx: lerp(1400, 0, main),  // 从屏幕外右侧飞入
+        dy: lerp(-80, 0, main),
+        dz: lerp(-200, 0, main),
+        scaleDelta: lerp(0.65, 1.0, main) - 1.0,
+        rotZ: lerp(15, 0, main),
+        rotY: lerp(25, 0, main),
+        blur: lerp(1.5, 0, main),
+        opacity: early,
+      };
+    },
+    /* fly-top — 从屏幕上方飞入 */
+    'fly-top': (p) => {
+      const main = smoothstep(clamp((p - 0.15) / 0.70, 0, 1));
+      const early = smoothstep(clamp(p / 0.25, 0, 1));
+      return {
+        fromSlot:'BG_R',
+        dx: lerp(30, 0, main),
+        dy: lerp(-800, 0, main),  // 从屏幕上方飞入
+        dz: lerp(-300, 0, main),
+        scaleDelta: lerp(0.55, 1.0, main) - 1.0,
+        rotZ: lerp(-8, 0, main),
+        rotX: lerp(15, 0, main),
+        blur: lerp(1.2, 0, main),
+        opacity: early,
+      };
+    },
+    /* fly-bottom — 从屏幕下方飞入 */
+    'fly-bottom': (p) => {
+      const main = smoothstep(clamp((p - 0.15) / 0.70, 0, 1));
+      const early = smoothstep(clamp(p / 0.25, 0, 1));
       return {
         fromSlot:'BG_L',
-        fromZ:-680, fromScale:0.36, fromOpacity:0.16, fromBlur:1.4,
-        dx: lerp(-15, 0, main),
-        dy: 0,
-        dz: lerp(-680, 0, main),
-        scaleDelta: lerp(0.36, 1.0, main) - 1.0,
-        rotZ: 0,
-        rotY: lerp(-6, 0, main),
-        blur: lerp(1.4, 0, main),
+        dx: lerp(-30, 0, main),
+        dy: lerp(800, 0, main),  // 从屏幕下方飞入
+        dz: lerp(-300, 0, main),
+        scaleDelta: lerp(0.55, 1.0, main) - 1.0,
+        rotZ: lerp(8, 0, main),
+        rotX: lerp(-15, 0, main),
+        blur: lerp(1.2, 0, main),
         opacity: early,
       };
     },
+    /* cross — 从右侧穿越到中心,中段短暂经过前景 */
+    'cross': (p) => {
+      const main = smoothstep(clamp((p - 0.10) / 0.70, 0, 1));
+      const early = smoothstep(clamp(p / 0.15, 0, 1));
+      // arc: 中心时 z 短暂冲到 +120(前景)
+      const arcZ = Math.sin(main * Math.PI) * 180;
+      return {
+        fromSlot:'MG_R',
+        dx: lerp(900, 0, main),  // 从屏幕外右侧穿越
+        dy: lerp(-100, 0, main),
+        dz: lerp(-400, 0, main) + arcZ,
+        scaleDelta: lerp(0.50, 1.0, main) - 1.0,
+        rotZ: lerp(20, 0, main),
+        rotY: lerp(35, 0, main),
+        blur: lerp(1.5, 0, main),
+        opacity: early,
+      };
+    },
+    /* push — Camera 与新 hero 同时推进 */
+    'push': (p) => {
+      const main = smoothstep(clamp((p - 0.10) / 0.70, 0, 1));
+      const early = smoothstep(clamp(p / 0.20, 0, 1));
+      return {
+        fromSlot:'BG_L',
+        dx: lerp(-50, 0, main),
+        dy: 0,
+        dz: lerp(-1200, 0, main),
+        scaleDelta: lerp(0.30, 1.0, main) - 1.0,
+        rotZ: 0,
+        rotY: lerp(-12, 0, main),
+        blur: lerp(2.5, 0, main),
+        opacity: early,
+      };
+    },
+    /* camera-find — Camera 先寻找,hero 从 BG 浮现,带轻微 hover */
     'camera-find': (p) => {
-      // Camera 先寻找:hero 在远处微动,后段快速推进
-      const pre  = smoothstep(clamp(p / 0.35, 0, 1));
-      const main = smoothstep(clamp((p - 0.35) / 0.55, 0, 1));
+      const pre  = smoothstep(clamp(p / 0.30, 0, 1));
+      const main = smoothstep(clamp((p - 0.30) / 0.55, 0, 1));
       return {
         fromSlot:'MG_FAR_R',
-        fromZ:-480, fromScale:0.48, fromOpacity:0.28, fromBlur:1.0,
-        dx: lerp(25, 0, main),
-        dy: 0,
-        dz: lerp(-480, 0, main),
-        scaleDelta: lerp(0.48, 1.0, main) - 1.0,
+        dx: lerp(60, 0, main),
+        dy: lerp(-30, 0, main),
+        dz: lerp(-900, 0, main),
+        scaleDelta: lerp(0.35, 1.0, main) - 1.0,
         rotZ: 0,
-        rotY: 0,
-        blur: lerp(1.0, 0, main),
+        rotY: lerp(8, 0, main),
+        blur: lerp(2.0, 0, main),
         opacity: pre,
       };
     },
@@ -244,33 +280,32 @@
   const HANDOFF_DURATION = 4200;  // ms(主体 ~2.8s, settle 后续 ~1.4s)
 
   const HANDOFFS = [
-    // INTRO: 0:00 - 0:15 - 第一张记忆浮现(让 30s 测试能通过)
-    // 8s: 第一张记忆被发现 (建立 Hero)
-    { t:8,    preset:'depth',         camera:'push',      reason:'intro-discovery' },
-    // VERSE 1: 第一个 lyric 之前,第二次 handoff
+    // INTRO: 第一张记忆浮现(飞入!)
+    { t:8,    preset:'fly-top',       camera:'push',      reason:'intro-discovery' },
+    // VERSE 1: 第二个 handoff,从右侧飞入
     { t:18,   preset:'lateral-R',     camera:'push',      reason:'verse-flow' },
-    // VERSE 1 第二次 (34s - "最后没有了对白")
+    // VERSE 1 第三次
     { t:35,   preset:'lateral-L',     camera:'push',      reason:'verse-flow' },
-    // VERSE 1 第三次 (42s - "生命的起伏要认可")
+    // VERSE 1 第四次
     { t:52,   preset:'cross',         camera:'drift',     reason:'verse-flow' },
-    // CHORUS 1: 1:08 - "我们是对方 特别的人" — 大转场
+    // CHORUS 1: 大穿越
     { t:66,   preset:'cross',         camera:'dolly',     reason:'chorus-arrival' },
     { t:85,   preset:'push',          camera:'push',      reason:'chorus-mid' },
-    { t:97,   preset:'lateral-R',     camera:'dolly',     reason:'chorus-outro' },
-    // VERSE 2: 1:48 - 续 verse
-    { t:115,  preset:'lateral-R',     camera:'drift',     reason:'verse-flow' },
-    // CHORUS 2: 2:13 - Memory Explosion
-    { t:135,  preset:'cross',         camera:'dolly',     reason:'chorus-arrival' },
+    { t:97,   preset:'lateral-L',     camera:'dolly',     reason:'chorus-outro' },
+    // VERSE 2
+    { t:115,  preset:'fly-bottom',    camera:'drift',     reason:'verse-flow' },
+    // CHORUS 2: 推入 + 穿越
+    { t:135,  preset:'depth',         camera:'dolly',     reason:'chorus-arrival' },
     { t:152,  preset:'camera-find',   camera:'dolly',     reason:'time-rewind' },
-    // BRIDGE: 2:50 - Hero 退后,等待
+    // BRIDGE: Hero 退后
     { t:172,  preset:'pull-away',     camera:'pull',      reason:'bridge-arrival' },
-    // BRIDGE END / FINAL CHORUS: 3:14 - Hero Arrival
-    { t:194,  preset:'depth',         camera:'push',      reason:'bridge-arrival' },
+    // BRIDGE END: Hero Arrival(从下方飞入)
+    { t:194,  preset:'fly-bottom',    camera:'push',      reason:'bridge-arrival' },
     // FINAL CHORUS
     { t:205,  preset:'cross',         camera:'dolly',     reason:'final-cycle' },
-    { t:222,  preset:'lateral-L',     camera:'push',      reason:'final-cycle' },
-    { t:232,  preset:'cross',         camera:'dolly',     reason:'final-cycle' },
-    // OUTRO: 3:50 之后 — 最后一次微弱 handoff
+    { t:222,  preset:'lateral-R',     camera:'push',      reason:'final-cycle' },
+    { t:232,  preset:'lateral-L',     camera:'dolly',     reason:'final-cycle' },
+    // OUTRO
     { t:248,  preset:'camera-find',   camera:'pull',      reason:'afterglow-end' },
   ];
 
@@ -425,12 +460,11 @@
   }
 
   /* ===================== getOutgoingMotion ====================
-     给已经退到 FG_LEFT 的旧 hero card,返回它的"退场"偏移(pixels)。
-     旧 hero 在 handoff progress 0.20 开始退场(从 HERO 中心 → FG_LEFT → BG):
-       - 前 50% (progress 0.20~0.60):从 HERO (z=0) 退到 FG_LEFT (z=-160, x 偏左)
-       - 后 50% (progress 0.60~1.00):从 FG_LEFT 进一步退到 BG (z=-480)
-     dx/dy/dz 在 memories.js 中以像素单位叠加到 card.transform 上。
-     注意:由于 memories.js 已经把 base slot 转成 pixels,这里的 dx/dy/dz 是 pixel delta。
+     给已经退到 FG_LEFT 的旧 hero card,返回它的"退场"偏移。
+     旧 hero 在 handoff progress 0.20 开始退场,真的"飞出场":
+       - 前 50%:从 HERO 中心 → FG_LEFT(抵消 base 偏移 + 轻微下沉 + 旋转)
+       - 后 50%:从 FG_LEFT 飞向左下方出屏幕(大幅 x 偏移 + opacity → 0)
+     返回的 dxRatio/dyRatio 由 memories.js 乘 rect.width/height 转像素。
   */
   function getOutgoingMotion(sceneState, cardSlotName){
     if(!sceneState.outgoingIdx) return null;
@@ -438,36 +472,29 @@
     const k = sceneState.outgoingProgress;
 
     if(cardSlotName === 'FG_LEFT'){
-      /* FG_LEFT base = (x:30, y:52, z:-160) 相对 viewport 中心 */
-      /* 在 memories.js 中,px = (30-50)/100 * rect.width = -20% width */
-      /* 要把 card 推到屏幕中心 (x:50),需要 dx = +20% width = ~384px on 1920 */
-      /* 视口大小不固定,所以我们让 memories.js 传 rect 参数,然后这里用相对单位 */
-      /* 实际实现:memories.js 已经做了 base slot 转 pixel,所以这里给 pixel 增量 */
-      /* 前 50%:card 从中心 → FG_LEFT(但 base 已经把它放到 FG_LEFT,所以需要抵消 base) */
       if(k < 0.5){
         const kk = k / 0.5;
         return {
-          /* FG_LEFT base 占 -20% width(1920px 屏幕 = -384px),把它推到中心需要 dx ≈ +384px */
-          /* 但 dx 是绝对像素,这里用 viewport 比例,所以 memories.js 需要先乘 width */
-          /* 改为:让 memories.js 传 rect width,这里返回百分比偏移 */
-          dxRatio: lerp(0.20, 0, kk),   /* +20% width → 0 */
+          dxRatio: lerp(0.20, 0, kk),
           dyRatio: lerp(-0.02, 0, kk),
           dz: lerp(160, 0, kk),
           scaleDelta: lerp(0, -0.22, kk),
           opacityDelta: lerp(0, -0.30, kk),
           blurDelta: lerp(0, 0.4, kk),
-          rotZ: lerp(0, -8, kk),
+          rotZ: lerp(0, -12, kk),
+          rotY: lerp(0, -20, kk),
         };
       } else {
         const kk = (k - 0.5) / 0.5;
         return {
-          dxRatio: lerp(0, -0.05, kk),
-          dyRatio: lerp(0, 0.13, kk),
-          dz: lerp(0, 320, kk),
-          scaleDelta: lerp(-0.22, -0.52, kk),
-          opacityDelta: lerp(-0.30, -0.55, kk),
-          blurDelta: lerp(0.4, 1.2, kk),
-          rotZ: lerp(-8, -10, kk),
+          dxRatio: lerp(0, -0.35, kk),
+          dyRatio: lerp(0, 0.20, kk),
+          dz: lerp(0, 250, kk),
+          scaleDelta: lerp(-0.22, -0.55, kk),
+          opacityDelta: lerp(-0.30, -0.85, kk),
+          blurDelta: lerp(0.4, 1.8, kk),
+          rotZ: lerp(-12, -25, kk),
+          rotY: lerp(-20, -45, kk),
         };
       }
     }

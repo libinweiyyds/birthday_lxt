@@ -156,9 +156,9 @@
       return {
         x: Math.sin(t*0.04)*2,
         y: Math.sin(t*0.05)*1.5,
-        z: k * 180,
+        z: k * 320,           // 大幅推进
         rotX: 0, rotY: 0,
-        scale: 1 + k*0.06,
+        scale: 1 + k*0.12,    // 配合 scale up
       };
     },
     'pull': (p, t) => {
@@ -166,31 +166,31 @@
       return {
         x: Math.sin(t*0.04)*2,
         y: Math.sin(t*0.05)*1.5,
-        z: -k * 220,
+        z: -k * 380,          // 大幅拉远
         rotX: 0, rotY: 0,
-        scale: 1 - k*0.10,
+        scale: 1 - k*0.18,    // 配合 scale down
       };
     },
     'dolly': (p, t) => {
-      // dolly: 摄影机横向轻微扫过,配合 cross preset
+      // dolly: 摄影机大幅横向扫过(配合 cross preset)
       const k = smoothstep(clamp(p, 0, 1));
       return {
-        x: lerp(40, -40, k),
+        x: lerp(150, -150, k),    // 大幅横移
         y: Math.sin(t*0.04)*1,
-        z: k * 80,
+        z: k * 180,                // 推进
         rotX: 0,
-        rotY: lerp(2, -2, k),
-        scale: 1 + k*0.04,
+        rotY: lerp(4, -4, k),      // 配合 rotateY
+        scale: 1 + k*0.08,
       };
     },
     'drift': (p, t) => {
       const k = smoothstep(clamp(p, 0, 1));
       return {
-        x: lerp(-30, 30, k),
+        x: lerp(-80, 80, k),
         y: Math.sin(t*0.04)*1,
         z: 0,
         rotX: 0,
-        rotY: lerp(1, -1, k),
+        rotY: lerp(3, -3, k),
         scale: 1,
       };
     },
@@ -201,7 +201,7 @@
         y: Math.sin(t*0.05)*1,
         z: 0,
         rotX: Math.sin(t*0.03)*0.2,
-        rotY: -3 + k*6,
+        rotY: -8 + k*16,        // 大幅 orbit
         scale: 1,
       };
     },
@@ -366,21 +366,22 @@
          在 handoff 期间,根据 handoffMotion 从 BG 推进到 HERO */
       if(i === 0 && handoffMotion){
         // 用 motion 覆盖 base position
-        // handoffMotion.dz 表示"目标 z 偏移量",我们要让 card 从 origin z → 0
-        // 我们用 slotBase.z + motion.dz 即可
-        // 同时 scale, opacity, blur, dx, dy, rotZ, rotY 由 motion 提供
+        // dx/dy 是绝对像素(可以 ±1500px)
+        // dz 是 z 偏移(可以 ±1500)
         px += handoffMotion.dx;
         py += handoffMotion.dy;
         pz += handoffMotion.dz;
         scale += handoffMotion.scaleDelta;
-        opacity = handoffMotion.opacity; // 完全由 motion 决定(从 BG 浮现)
+        opacity = handoffMotion.opacity; // 完全由 motion 决定(从屏幕外飞入)
         blur = handoffMotion.blur;
         // rotation
         card.target.rotZ = handoffMotion.rotZ || 0;
         card.target.rotY = handoffMotion.rotY || 0;
+        card.target.rotX = handoffMotion.rotX || 0;
       } else {
         card.target.rotZ = 0;
         card.target.rotY = 0;
+        card.target.rotX = 0;
       }
 
       /* === FG_LEFT card (slot 1) ===
@@ -401,6 +402,7 @@
         opacity += outgoingMotion.opacityDelta;
         blur += outgoingMotion.blurDelta;
         card.target.rotZ = outgoingMotion.rotZ || 0;
+        card.target.rotY = outgoingMotion.rotY || 0;
       }
 
       /* === handoff 期间,非 HERO/FG_LEFT 卡片保持 SLOTS 位置,但轻微 blur/opacity 调整 === */
@@ -448,7 +450,15 @@
 
       /* Lerp live → target */
       const L = card.live;
-      const lambda = (i === 0) ? 4.5 : 3.5;
+      /* Hero card (i===0) 在 handoff 期间需要快速跟踪大幅 motion */
+      let lambda;
+      if(i === 0 && handoffMotion){
+        lambda = 7.0;  // 高追踪速度,让飞入动作快速到位
+      } else if(i === 0){
+        lambda = 4.5;
+      } else {
+        lambda = 3.5;
+      }
       L.x = lerp(L.x, card.target.x, damp(lambda, dt));
       L.y = lerp(L.y, card.target.y, damp(lambda, dt));
       L.z = lerp(L.z, card.target.z, damp(lambda, dt));
