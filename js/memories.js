@@ -274,8 +274,8 @@
     const rect = dom.carousel.getBoundingClientRect();
 
     /* 全局 camera ambient breathing(让画面有"呼吸"感) */
-    const globalBreathX = Math.sin(t * 0.45) * 1.2;
-    const globalBreathY = Math.cos(t * 0.52) * 0.8;
+    const globalBreathX = Math.sin(t * 0.45) * 2.0;
+    const globalBreathY = Math.cos(t * 0.52) * 1.4;
 
     for(let i=0;i<NUM_CARDS;i++){
       const card = cards[i];
@@ -314,28 +314,45 @@
       }
 
       /* === AMBIENT MOTION (始终开启,让画面' 一直活着') ===
-         每张卡按 depth cluster 频率做缓慢漂浮,独立 phase 避免同步 */
+         多频率叠加,确保运动永不重复
+         每张卡独立 phase + 多种波形 */
       const phaseBase = i * 0.83 + slotRole.charCodeAt(0) * 0.1;
       let amb_driftX = 0, amb_driftY = 0, amb_driftRZ = 0, amb_driftRY = 0, amb_driftRX = 0;
+      let amb_driftZ = 0, amb_scaleBreathe = 0;
 
       /* 振幅按 depth 调制:FG 卡片更活跃, BG 更静 */
-      const depthAmp = clamp(1 + pz / 400, 0.3, 1.6);
+      const depthAmp = clamp(1 + pz / 400, 0.3, 1.8);
+
       if(i !== 0){
-        // Supporting cards: 各自独立的漂移
-        const wave1 = Math.sin(t * 0.31 + phaseBase);
-        const wave2 = Math.cos(t * 0.27 + phaseBase * 0.7);
-        const wave3 = Math.sin(t * 0.19 + phaseBase * 1.3);
-        const wave4 = Math.cos(t * 0.41 + phaseBase * 0.5);
-        amb_driftX = wave1 * 4 * depthAmp;
-        amb_driftY = wave2 * 3 * depthAmp;
-        amb_driftRZ = wave3 * 1.2 * depthAmp;
-        amb_driftRY = wave4 * 1.5 * depthAmp;
-        amb_driftRX = Math.sin(t * 0.15 + phaseBase * 0.9) * 0.6 * depthAmp;
+        // Supporting cards: 多频率叠加,让运动更"活"
+        // 主频率 + 副频率 + 微抖
+        const w1 = Math.sin(t * 0.42 + phaseBase);
+        const w2 = Math.cos(t * 0.31 + phaseBase * 0.7);
+        const w3 = Math.sin(t * 0.27 + phaseBase * 1.4);
+        const w4 = Math.cos(t * 0.55 + phaseBase * 0.5);
+        const w5 = Math.sin(t * 0.18 + phaseBase * 1.8);
+        const w6 = Math.cos(t * 0.71 + phaseBase * 0.3);
+
+        // 位移 (px) — 大幅放大
+        amb_driftX = (w1 * 14 + w5 * 4) * depthAmp;
+        amb_driftY = (w2 * 11 + w6 * 3) * depthAmp;
+        // 旋转 — 大幅放大
+        amb_driftRZ = (w3 * 5.5 + w5 * 1.5) * depthAmp;
+        amb_driftRY = (w4 * 7 + w6 * 2) * depthAmp;
+        amb_driftRX = Math.sin(t * 0.23 + phaseBase * 0.9) * 2.5 * depthAmp;
+        // z 方向小幅推进 (cards 在前后方向也漂浮)
+        amb_driftZ = Math.sin(t * 0.18 + phaseBase * 1.1) * 35 * depthAmp;
+        // scale breathing
+        amb_scaleBreathe = Math.sin(t * 0.35 + phaseBase * 0.8) * 0.06 * depthAmp;
       } else {
         // Hero: 极轻微 breathing (LOCKED 阶段让画面"活着",但不过分)
-        amb_driftX = Math.sin(t * 0.4) * 1.0;
-        amb_driftY = Math.cos(t * 0.45) * 0.7;
-        amb_driftRZ = Math.sin(t * 0.3) * 0.5;
+        const hb1 = Math.sin(t * 0.4);
+        const hb2 = Math.cos(t * 0.5);
+        const hb3 = Math.sin(t * 0.28);
+        amb_driftX = hb1 * 2.0;
+        amb_driftY = hb2 * 1.5;
+        amb_driftRZ = hb3 * 1.0;
+        amb_scaleBreathe = Math.sin(t * 0.45) * 0.015;  // 1.5% scale breathing
       }
 
       /* === BEAT-SPECIFIC MOTION (大动作,只在过渡阶段) === */
@@ -432,8 +449,8 @@
       /* === COMBINE: 应用所有 motion === */
       let finalX = px + amb_driftX + beat_driftX + globalBreathX + camLive.x;
       let finalY = py + amb_driftY + beat_driftY + globalBreathY + camLive.y;
-      let finalZ = pz + camLive.z;
-      let finalScale = scale + beat_scaleMul;
+      let finalZ = pz + amb_driftZ + camLive.z;
+      let finalScale = scale + beat_scaleMul + amb_scaleBreathe;
       let finalOpacity = opacity + beat_opacityMul;
       let finalBlur = blur + beat_blurMul;
       let finalRotZ = rotZ + amb_driftRZ + beat_driftRZ;
@@ -521,10 +538,15 @@
       dom.fx.heroLight.style.setProperty('--hero-op', op.toFixed(3));
     }
 
-    /* === 8) 粒子 (静态位置 + opacity 微闪) === */
+    /* === 8) 粒子 (持续漂浮 + opacity 微闪) === */
     particles.forEach(p => {
-      const opacity = (0.18 + Math.sin(t*0.5 + p.phase)*0.10) * 0.6;
-      p.el.style.transform = `translate3d(${p.x}vw, ${p.y}vh, 0)`;
+      // 粒子按各自 phase 缓慢漂浮
+      const driftX = Math.sin(t * 0.15 + p.phase) * 0.8;
+      const driftY = Math.cos(t * 0.11 + p.phase * 1.3) * 0.6;
+      const x = p.x + driftX;
+      const y = p.y + driftY;
+      const opacity = (0.20 + Math.sin(t*0.5 + p.phase)*0.12) * 0.7;
+      p.el.style.transform = `translate3d(${x}vw, ${y}vh, 0)`;
       p.el.style.opacity = opacity.toFixed(3);
     });
 
