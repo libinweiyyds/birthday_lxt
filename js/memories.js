@@ -289,11 +289,12 @@
         px = (heroPos.x - 50) / 100 * rect.width;
         py = (heroPos.y - 50) / 100 * rect.height;
         pz = heroPos.z;
-        scale = heroPos.scale * heroMotion.scaleMul;
-        opacity = heroMotion.opacityMul;
-        blur = heroMotion.blurMul;
-        rotZ = (heroPos.rotZ || 0) + heroMotion.rotZ;
-        rotY = (heroPos.rotY || 0) + heroMotion.rotY;
+        // Hero 基础状态 — transition motion 会叠加 scaleMul/blur/rot
+        scale = heroPos.scale;
+        opacity = 1.0;
+        blur = 0;
+        rotZ = heroPos.rotZ || 0;
+        rotY = heroPos.rotY || 0;
         rotX = 0;
       } else {
         const sPos = cur.supports[slotRole] || {};
@@ -355,107 +356,52 @@
         amb_scaleBreathe = Math.sin(t * 0.45) * 0.015;  // 1.5% scale breathing
       }
 
-      /* === BEAT-SPECIFIC MOTION (大动作,只在过渡阶段) === */
-      let beat_driftX = 0, beat_driftY = 0, beat_driftRZ = 0;
-      let beat_scaleMul = 0, beat_opacityMul = 0, beat_blurMul = 0;
-      let beat_rotZ = 0, beat_rotY = 0;
+      /* === CAMERA PARALLAX ===
+         Camera 移动时,不同 depth 层的卡片视觉位移不同 */
+      const parallaxFactor = window.HeroDirector.getParallaxFactor(pz);
+      const cameraParallaxX = -camLive.x * parallaxFactor;
+      const cameraParallaxY = -camLive.y * parallaxFactor;
 
-      if(phase === 'discovering'){
-        /* 镜头在寻找: 镜头方向的卡片 scale 微增,其他不动 */
-        const dir = cameraDir;
-        const isTarget = (i !== 0 && (slotRole.includes('LEFT') && dir === 'right' || slotRole.includes('RIGHT') && dir === 'left' || slotRole.includes('TOP') && dir === 'down' || slotRole.includes('BOTTOM') && dir === 'up'));
-        if(isTarget){
-          beat_scaleMul = phaseProgress * 0.15;
-        }
-        // hero 暂时 scale 微减 (镜头移动时画面轻微缩放)
-        if(i === 0){
-          beat_scaleMul = -phaseProgress * 0.04;
-        }
-      }
+      /* === TRANSITION MOTION (V10: 12 种 transition) ===
+         由 beat.transitionType 决定具体 motion */
+      const transMotion = window.HeroDirector.getTransitionMotion(
+        beatState.transitionType, phase, phaseProgress, i, slotRole, cameraDir
+      );
 
-      if(phase === 'releasing'){
-        /* 旧 hero 真的退场:scale ↓ opacity ↓ blur ↑, 戏剧化旋转 */
-        const k = smoothstep(phaseProgress);
-        if(i === 0){
-          beat_scaleMul = -k * 0.45;     // scale -45%
-          beat_opacityMul = -k * 0.7;    // opacity 几乎消失
-          beat_blurMul = k * 2.5;        // blur 大幅增加
-          beat_rotZ = k * 18;            // 戏剧化旋转
-          beat_rotY = k * 25;
-        } else {
-          // supporting cards 全部短暂 scale +20% (让位,扩展空间)
-          beat_scaleMul = k * 0.20;
-          beat_opacityMul = k * 0.15;
-          // supporting cards 飞散 (向外推)
-          const dirX = (px > 0 ? 1 : -1) * 80;
-          const dirY = (py > 0 ? 1 : -1) * 60;
-          beat_driftX = lerp(0, dirX, k);
-          beat_driftY = lerp(0, dirY, k);
-          beat_driftRZ = lerp(0, dirX * 0.05, k);
-        }
-      }
-
-      if(phase === 'incoming'){
-        /* 新 hero 真的飞入: 从屏幕外大幅滑入,overshoot,rotation */
-        const k = smoothstep(phaseProgress);
-        const easeOut = 1 - Math.pow(1 - k, 3);
-        if(i === 0){
-          // 新 hero 从 cameraDir 反方向飞入
-          const dir = cameraDir;
-          let enterX = 0, enterY = 0;
-          if(dir === 'right'){ enterX = -1500; }
-          else if(dir === 'left'){ enterX = 1500; }
-          else if(dir === 'up'){ enterY = -1500; }
-          else if(dir === 'down'){ enterY = 1500; }
-          else if(dir === 'in'){ enterX = -800; enterY = -400; } // in: 从左上方
-          else if(dir === 'pull'){ enterX = 1500; enterY = 800; }
-          // 飞入: progress 0 → 1 时 enterX 从最大值 → 0
-          const enterDX = enterX * (1 - easeOut);
-          const enterDY = enterY * (1 - easeOut);
-          beat_driftX = enterDX;
-          beat_driftY = enterDY;
-          beat_driftRZ = -enterX * 0.01 * (1 - easeOut); // 飞行中带点倾斜
-          beat_scaleMul = (1 - easeOut) * 0.25; // 起始小 25%,ease 变大
-          // overshoot: progress 0.85-1.0 时 scale 短暂 +8% 再回到 1.0
-          if(k > 0.85){
-            const ok = (k - 0.85) / 0.15;
-            const overshoot = Math.sin(ok * Math.PI) * 0.08;
-            beat_scaleMul += overshoot;
-          }
-          // opacity 从 0 到 1
-          beat_opacityMul = (1 - easeOut);
-          beat_blurMul = (1 - easeOut) * 2.0;
-          // rotation: 进入时倾斜
-          beat_rotZ = (1 - easeOut) * (dir === 'right' ? -15 : dir === 'left' ? 15 : 0);
-          beat_rotY = (1 - easeOut) * (dir === 'right' ? -20 : dir === 'left' ? 20 : 0);
-        } else {
-          /* supporting cards: 先散开 → 再收拢 (explode → settle)
-             progress 0~0.5: 散开 (远离 hero)
-             progress 0.5~1.0: 收拢 (回原位) */
-          const explodeT = phaseProgress < 0.5
-            ? phaseProgress * 2  // 0~1
-            : 1 - (phaseProgress - 0.5) * 2; // 1~0
-          const smoothExp = Math.sin(explodeT * Math.PI); // 0→1→0 平滑曲线
-          // 从 hero 中心向外散
-          const angle = (i * 0.85 + phaseBase * 0.3) * Math.PI;
-          beat_driftX = Math.cos(angle) * smoothExp * 60;
-          beat_driftY = Math.sin(angle) * smoothExp * 60;
-          beat_driftRZ = smoothExp * 6 * (i % 2 === 0 ? 1 : -1);
-          beat_scaleMul = smoothExp * 0.10;
-          beat_opacityMul = smoothExp * 0.20;
+      /* === FOREGROUND PASS 特殊处理 ===
+         slot 1 (FG_LEFT) 在 foreground-pass 时做大动作划过 */
+      let fgPass_driftX = 0, fgPass_driftY = 0, fgPass_driftZ = 0;
+      let fgPass_scaleMul = 0, fgPass_opacityMul = 0, fgPass_rotZ = 0;
+      if(beatState.transitionType === 'foreground-pass' && i === 1){
+        if(phase === 'releasing'){
+          const k = phaseProgress;
+          fgPass_driftX = -1920 * (1 - Math.pow(1 - k, 2));  // easeOutQuad 从 -1920 → 0
+          fgPass_driftY = -200 * (1 - k) + 200 * k;
+          fgPass_driftZ = 400 + (-400 * k);
+          fgPass_scaleMul = (k - 0.5) * 1.5;
+          fgPass_opacityMul = k * 0.5;
+          fgPass_rotZ = (1 - k) * 8;
+        } else if(phase === 'incoming'){
+          const k = phaseProgress;
+          fgPass_driftX = 0 + 1920 * Math.pow(k, 2);
+          fgPass_driftY = 200 * (k - 0.5);
+          fgPass_driftZ = -200 * k;
+          fgPass_scaleMul = (1 - k) * 1.0;
+          fgPass_opacityMul = (1 - k) * 0.5;
+          fgPass_rotZ = k * 8;
         }
       }
 
       /* === COMBINE: 应用所有 motion === */
-      let finalX = px + amb_driftX + beat_driftX + globalBreathX + camLive.x;
-      let finalY = py + amb_driftY + beat_driftY + globalBreathY + camLive.y;
-      let finalZ = pz + amb_driftZ + camLive.z;
-      let finalScale = scale + beat_scaleMul + amb_scaleBreathe;
-      let finalOpacity = opacity + beat_opacityMul;
-      let finalBlur = blur + beat_blurMul;
-      let finalRotZ = rotZ + amb_driftRZ + beat_driftRZ;
-      let finalRotY = rotY + amb_driftRY + beat_rotY;
-      let finalRotX = amb_driftRX;
+      let finalX = px + amb_driftX + transMotion.driftX + fgPass_driftX + globalBreathX + cameraParallaxX;
+      let finalY = py + amb_driftY + transMotion.driftY + fgPass_driftY + globalBreathY + cameraParallaxY;
+      let finalZ = pz + amb_driftZ + transMotion.driftZ + fgPass_driftZ + camLive.z;
+      let finalScale = scale + transMotion.scaleMul + amb_scaleBreathe + fgPass_scaleMul;
+      let finalOpacity = opacity + transMotion.opacityMul + fgPass_opacityMul;
+      let finalBlur = blur + transMotion.blurMul;
+      let finalRotZ = rotZ + amb_driftRZ + transMotion.rotZ + fgPass_rotZ;
+      let finalRotY = rotY + amb_driftRY + transMotion.rotY;
+      let finalRotX = amb_driftRX + transMotion.rotX;
 
       /* 写入 target */
       card.target.x = finalX;
