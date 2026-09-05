@@ -1,18 +1,29 @@
-/* ==================== Memory Director V8 ====================
-   《Memory Director V8 — Memory Cinema》
-   重新设计的核心:
-     - 单张照片不能再"无限抖动":每张卡片基于 HeroDirector.SLOTS 的固定位置
-     - 真实的故事推进来自 HeroDirector.HANDOFFS 列表的 Hero 交接
-     - 每次交接都有 DISCOVERY → APPROACH → CROSS → SETTLE 四阶段
-     - 卡片只在交接期间明显运动,其它时间只有"呼吸"级微动
-     - Camera 由 handoff.camera 决定(push/pull/dolly/orbit/stillness)
-     - 歌词决定 hero 交接的"理由",但不直接驱动运动
+/* ==================== Cinematic Memory Director V9 ====================
+   《Memory Director V9 — Cinematic Memory / 电影式回忆蒙太奇》
 
-   模块:
-     HeroDirector      谁是主角 / 何时交接 / 以何种方式入场
-     Camera Director    当前镜头处于什么 Shot
-     Card Choreographer 单张卡片的 transform:slot + handoff + outgoing + ambient
+   核心转变 (vs V8):
+     - 抛弃"卡片永远在动"的思路
+     - 抛弃"卡片基于固定 SLOTS"的思路
+     - 改为 Beat 状态机: LOCKED / DISCOVERING / RELEASING / INCOMING
+     - 每个 Beat 是一个完整的镜头故事(发现 → 交接 → 停留)
+     - 镜头 (Camera) 是视觉变化的主体,卡片只在过渡期间有动作
+     - 平时画面几乎静止,只有非常细微的 breathing
+     - Hero 真的切换:每次 Beat 切换时,新 photoIdx 进入中心
+
+   渲染层级:
+     L0 星空背景 (固定)
+     L1 大气光 (固定,微闪)
+     L2 粒子 (固定)
+     L3 Photos (.layer-photo) — 由 Camera + Composition 驱动
+       .camera-rig 整体 3D 移动
+       .memory-cards-stack 内有 9 张 cards
+     L4 Effects (固定)
+     L5 Lyrics (固定)
+     L6 UI (固定)
+
+   Memories 页面的所有视觉变化都集中在 L3。
 */
+
 (function(){
   'use strict';
 
@@ -97,7 +108,6 @@
     });
   }
 
-  /* 每张 card 的 DOM 结构: <card> <img-A/> <img-B/> <caption/> </card> */
   const cards = [];
   function buildCards(){
     for(let i=0;i<NUM_CARDS;i++){
@@ -116,14 +126,13 @@
         el, imgA, imgB, cap,
         activeLayer:'A',
         currentSrc:'',
-        target:{x:0,y:0,w:300,h:400,rotX:0,rotY:0,rotZ:0,scale:1,blur:0,opacity:0,brightness:1,saturate:1},
-        live:{x:0,y:0,w:300,h:400,rotX:0,rotY:0,rotZ:0,scale:1,blur:0,opacity:0,brightness:1,saturate:1,z:0},
+        target:{x:0,y:0,z:0,w:300,h:400,rotX:0,rotY:0,rotZ:0,scale:1,blur:0,opacity:0,brightness:1,saturate:1},
+        live:{x:0,y:0,z:0,w:300,h:400,rotX:0,rotY:0,rotZ:0,scale:1,blur:0,opacity:0,brightness:1,saturate:1},
       });
     }
   }
   buildCards();
 
-  /* 跨预加载 + crossfade 设置卡片图片 */
   const FALLBACK_SRC = 'img/1.jpg';
   async function setCardImage(c, src){
     let useSrc = src;
@@ -146,117 +155,49 @@
     });
   }
 
-  /* ===================== Camera Tone → Shot 函数 ====================
-     Camera 在 handoff 期间根据 cameraTone 做对应运动,
-     平时只有 ambient breathing。
-  */
-  const CAMERA_SHOTS = {
-    'push': (p, t) => {
-      const k = smoothstep(clamp(p, 0, 1));
-      return {
-        x: Math.sin(t*0.04)*2,
-        y: Math.sin(t*0.05)*1.5,
-        z: k * 320,           // 大幅推进
-        rotX: 0, rotY: 0,
-        scale: 1 + k*0.12,    // 配合 scale up
-      };
-    },
-    'pull': (p, t) => {
-      const k = smoothstep(clamp(p, 0, 1));
-      return {
-        x: Math.sin(t*0.04)*2,
-        y: Math.sin(t*0.05)*1.5,
-        z: -k * 380,          // 大幅拉远
-        rotX: 0, rotY: 0,
-        scale: 1 - k*0.18,    // 配合 scale down
-      };
-    },
-    'dolly': (p, t) => {
-      // dolly: 摄影机大幅横向扫过(配合 cross preset)
-      const k = smoothstep(clamp(p, 0, 1));
-      return {
-        x: lerp(150, -150, k),    // 大幅横移
-        y: Math.sin(t*0.04)*1,
-        z: k * 180,                // 推进
-        rotX: 0,
-        rotY: lerp(4, -4, k),      // 配合 rotateY
-        scale: 1 + k*0.08,
-      };
-    },
-    'drift': (p, t) => {
-      const k = smoothstep(clamp(p, 0, 1));
-      return {
-        x: lerp(-80, 80, k),
-        y: Math.sin(t*0.04)*1,
-        z: 0,
-        rotX: 0,
-        rotY: lerp(3, -3, k),
-        scale: 1,
-      };
-    },
-    'orbit': (p, t) => {
-      const k = smoothstep(clamp(p, 0, 1));
-      return {
-        x: Math.sin(t*0.04)*1.5,
-        y: Math.sin(t*0.05)*1,
-        z: 0,
-        rotX: Math.sin(t*0.03)*0.2,
-        rotY: -8 + k*16,        // 大幅 orbit
-        scale: 1,
-      };
-    },
-    'stillness': (p, t) => ({
-      x: Math.sin(t*0.04)*0.6,   // 降低 ambient 振幅 (之前 1.5)
-      y: Math.sin(t*0.05)*0.4,
-      z: 0, rotX: 0, rotY: 0, scale: 1,
-    }),
-    '__none': (p, t) => ({ x:0, y:0, z:0, rotX:0, rotY:0, scale:1 }),
-  };
+  /* ===================== Slot 映射 =====================
+     9 张 DOM cards 的角色:
+       slot 0: HERO (当前主角)
+       slot 1: FG_NEAR_LEFT (左前遮挡)
+       slot 2: FG_NEAR_RIGHT (右前遮挡)
+       slot 3: MG_LEFT (中景左)
+       slot 4: MG_RIGHT (中景右)
+       slot 5: BG_LEFT (远景左)
+       slot 6: BG_RIGHT (远景右)
+       slot 7: BG_TOP (远景上)
+       slot 8: BG_BOTTOM (远景下)
+   */
+  const SLOT_ROLES = [
+    'HERO',          // 0
+    'FG_LEFT',       // 1
+    'FG_RIGHT',      // 2
+    'MG_LEFT',       // 3
+    'MG_RIGHT',      // 4
+    'BG_LEFT',       // 5
+    'BG_RIGHT',      // 6
+    'BG_TOP',        // 7
+    'BG_BOTTOM',     // 8
+  ];
 
-  /* ===================== 粒子(Layer 2) ===================== */
-  const MAX_PARTICLES = 10;
-  const particles = [];
-  const particleRng = (window.MotionScheduler && window.MotionScheduler.mulberry32
-                       ? window.MotionScheduler.mulberry32(91732191 ^ 0x917321)
-                       : (() => { let s=0; return () => { s=(s*1103515245+12345)&0x7fffffff; return s/0x80000000; }; })());
-  function initParticles(){
-    for(let i=0;i<MAX_PARTICLES;i++){
-      const p = document.createElement('div');
-      p.className = 'ambient-particle';
-      const w = (1.5 + particleRng()*2);
-      p.style.width = w + 'px';
-      p.style.height = p.style.width;
-      p.style.opacity = '0';
-      dom.layerParts.appendChild(p);
-      particles.push({
-        el:p, x: particleRng()*100, y: particleRng()*100,
-        vx: (particleRng()-0.5)*0.015, vy: (particleRng()-0.5)*0.015 - 0.003,
-        phase: particleRng()*Math.PI*2, w,
-      });
-    }
+  /* 默认 card 尺寸 */
+  function cardSizeForSlot(slotRole){
+    if(slotRole === 'HERO')      return { w: 460, h: 580 };
+    if(slotRole === 'FG_LEFT' || slotRole === 'FG_RIGHT') return { w: 280, h: 360 };
+    return { w: 220, h: 280 };  // MG/BG 较小
   }
-  initParticles();
-
-  /* ===================== 唱片封面 fallback ===================== */
-  function imgFallback(imgEl){
-    imgEl.addEventListener('error', function(){
-      if(this.dataset.fallbackApplied === '1') return;
-      this.dataset.fallbackApplied = '1';
-      this.src = 'img/1.jpg';
-    });
-  }
-  imgFallback(dom.diskCover);
 
   /* ===================== 状态 ===================== */
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let lastT = performance.now();
   let rafId = 0;
-  const camLive = { x:0, y:0, rotX:0, rotY:0, z:0, scale:1 };
 
-  /* 每张 card 的 "currentPhotoIdx" — 跟踪每张 DOM card 当前显示的照片 */
+  /* Camera live 平滑插值 */
+  const camLive = { x:0, y:0, z:0, rotX:0, rotY:0, scale:1 };
+
+  /* 每张 card 当前显示的 photoIdx */
   const cardCurrentPhoto = new Array(NUM_CARDS).fill(-1);
-  /* 上一次 handoff 状态 — 用于检测 handoff 边界 */
-  let lastHandoffKey = '';
+  /* 上一次的 scenePhotoIndices,用于检测 hero 是否切换 */
+  let lastHeroPhotoIdx = -1;
 
   /* ===================== RAF Render Loop ===================== */
   function tick(now){
@@ -265,42 +206,29 @@
     const time = window.musicBox ? window.musicBox.currentTime : 0;
     const t = now / 1000;
 
-    /* === 1) Scene State: HeroDirector 决定每张 DOM card 显示哪张照片、是否在 handoff === */
+    /* === 1) Beat State === */
     const numPhotos = (typeof NUM_PHOTOS !== 'undefined') ? NUM_PHOTOS : 42;
-    const scene = window.HeroDirector.getSceneState(time, numPhotos);
-    const handoff = scene.handoff;
-    const handoffPhase = handoff ? handoff._phase : null;
+    const beatState = window.HeroDirector.getBeatState(time, numPhotos);
+    const { beat, beatProgress, phase, phaseProgress, heroIdx, scenePhotoIndices, cameraDir, reason } = beatState;
 
-    /* === 2) Photo Sync:决定每张 DOM card 该显示哪张照片 ===
-       关键:handoff 期间 (progress 0.10~0.85) slot 0 (HERO) 显示 NEW hero
-       (从 BG 推进过来的新照片),让用户真的看到"新照片变成主角"。
-       其他 slot 保持当前 scene 分配(不变,避免突然跳变)。*/
+    /* === 2) Photo Sync ===
+       把 photoForSlot[i] 同步到 DOM card i
+       - HERO (slot 0): 在 INCOMING 阶段(phase='incoming' 且 progress < 0.5)时,显示 old hero (退场中的)
+         之后显示 new heroIdx
+       - 其他 slot: 直接显示 scenePhotoIndices[i] */
     const photoForDOM = new Array(NUM_CARDS);
-
-    if(handoff && handoff._progress >= 0.10 && handoff._progress < 0.85
-       && scene.incomingHeroIdx !== undefined && scene.incomingHeroIdx !== scene.heroIdx){
-      // 在 handoff 期间:slot 0 显示新 hero
-      photoForDOM[0] = scene.incomingHeroIdx;
-      // 旧 hero 此时在 FG_LEFT 位置上 — 但 DOM card 1 (FG_LEFT) 是固定显示 photoForSlot[1]
-      // 在 settle 之前,photoForSlot[1] 还是旧值(因为还没 advance)
-      // — 而旧 hero 仍然在 photoForSlot[0]。我们希望 FG_LEFT 显示旧 hero:
-      // 实际:scene.photoForSlot[0] = old hero (在 settle 之前)
-      // 所以把 slot 0 设为 incomingHeroIdx,其它 slot 仍按 photoForSlot
-      // — 这样 DOM card 1 继续显示 photoForSlot[1](不是旧 hero)
-      // 改进:让 slot 1 也显示 photoForSlot[0](旧 hero)
-      photoForDOM[1] = scene.photoForSlot[0]; // 旧 hero 暂时占据 FG_LEFT slot
-      for(let i=2;i<NUM_CARDS;i++){
-        photoForDOM[i] = scene.photoForSlot[i];
-      }
-    } else {
-      // 平时或 settle 后:slot 0 = 当前 hero, slot 1 = photoForSlot[1]
-      photoForDOM[0] = scene.photoForSlot[0];
-      for(let i=1;i<NUM_CARDS;i++){
-        photoForDOM[i] = scene.photoForSlot[i];
-      }
+    const showIncoming = (phase === 'incoming');
+    const useOldHeroForDOM0 = showIncoming && phaseProgress < 0.5;
+    /* DOM card 0 (HERO 位置) 应该显示的内容:
+       - RELEASING 阶段: 当前 heroIdx (退场中)
+       - INCOMING 阶段 early: heroIdx (旧的还在退)
+       - INCOMING 阶段 late (>=0.5): 新 hero (已切换 scenePhotoIndices)
+       - LOCKED: heroIdx */
+    photoForDOM[0] = scenePhotoIndices[0];  // beat.js 已经在 0.50 时切换了 scenePhotoIndices
+    for(let i=1;i<NUM_CARDS;i++){
+      photoForDOM[i] = scenePhotoIndices[i];
     }
-
-    /* 写入 DOM src (用 setCardImage 做 crossfade) */
+    /* 写入 DOM (用 setCardImage 做 crossfade) */
     for(let i=0;i<NUM_CARDS;i++){
       const target = photoForDOM[i];
       if(target !== cardCurrentPhoto[i] && target >= 0){
@@ -309,34 +237,18 @@
       }
     }
 
-    /* === 3) Camera ===
-       - handoff 期间:用 handoff.camera 对应的 Shot 函数
-       - 平时:stillness(只有 ambient breathing)
-    */
-    let camTarget;
-    if(handoff){
-      const tone = handoff.camera || 'stillness';
-      const shotFn = CAMERA_SHOTS[tone] || CAMERA_SHOTS.stillness;
-      camTarget = shotFn(handoff._progress, t);
-    } else if(time < 6){
-      // INTRO 期间:相机几乎不动,只有极轻微的 ambient
-      camTarget = {
-        x: Math.sin(t*0.03)*0.5,
-        y: Math.cos(t*0.04)*0.3,
-        z: 0, rotX: 0, rotY: 0, scale: 1,
-      };
-    } else {
-      // 平时 ambient breathing(克制版)
-      camTarget = CAMERA_SHOTS.stillness(0, t);
-    }
+    /* === 3) Camera State ===
+       基于 Beat phase + cameraDir 计算 camera target,然后平滑插值到 camLive */
+    const camTarget = window.HeroDirector.getCameraState(beat, phase, phaseProgress);
 
     /* 平滑插值 */
-    camLive.x     = lerp(camLive.x,     camTarget.x,     damp(2.0, dt));
-    camLive.y     = lerp(camLive.y,     camTarget.y,     damp(2.0, dt));
-    camLive.z     = lerp(camLive.z,     camTarget.z,     damp(2.0, dt));
-    camLive.rotX  = lerp(camLive.rotX,  camTarget.rotX,  damp(1.2, dt));
-    camLive.rotY  = lerp(camLive.rotY,  camTarget.rotY,  damp(1.2, dt));
-    camLive.scale = lerp(camLive.scale, camTarget.scale, damp(1.0, dt));
+    const camLambda = (phase === 'locked') ? 1.5 : 2.5;  // LOCKED 时更慢的 damping 让 camera 完全静止
+    camLive.x     = lerp(camLive.x,     camTarget.x,     damp(camLambda, dt));
+    camLive.y     = lerp(camLive.y,     camTarget.y,     damp(camLambda, dt));
+    camLive.z     = lerp(camLive.z,     camTarget.z,     damp(camLambda, dt));
+    camLive.rotX  = lerp(camLive.rotX,  camTarget.rotX,  damp(1.5, dt));
+    camLive.rotY  = lerp(camLive.rotY,  camTarget.rotY,  damp(1.5, dt));
+    camLive.scale = lerp(camLive.scale, camTarget.scale, damp(1.2, dt));
 
     if(dom.cameraRig){
       dom.cameraRig.style.transform =
@@ -345,255 +257,125 @@
         ` scale(${camLive.scale.toFixed(4)})`;
     }
 
-    /* === 4) 每张 card 的 transform ===
-       基础位置 = HeroDirector.SLOTS[i] (固定空间位置)
-       + handoff motion (新 hero 从 origin 到 HERO 的轨迹)
-       + outgoing motion (旧 hero 从 FG_LEFT 退向 BG)
-       + cinematic parallax drift (背景卡片持续的微弱运动,营造电影感)
-    */
+    /* === 4) Composition ===
+       根据 beat 状态决定当前 composition (镜头视角对应 cards 布局)
+       使用 lerp 在 composition 之间过渡,让画面构图平滑变化 */
+    const targetComp = window.HeroDirector.getCompositionForBeat(beat.beatType, cameraDir, phase);
+    /* 把 targetComp.hero 和 targetComp.supports 存到全局 lerp state */
+    if(!tick._compCurrent){
+      tick._compCurrent = {
+        hero: {...targetComp.hero},
+        supports: JSON.parse(JSON.stringify(targetComp.supports)),
+      };
+    }
+    /* 在 RELEASING 阶段 (即将切换 hero),composition 应该已经在 discovering 时调整过
+       简单 lerp: targetComp vs current */
+    const cur = tick._compCurrent;
+    const compLambda = 2.0;
+    /* lerp hero */
+    cur.hero.x = lerp(cur.hero.x, targetComp.hero.x, damp(compLambda, dt));
+    cur.hero.y = lerp(cur.hero.y, targetComp.hero.y, damp(compLambda, dt));
+    cur.hero.scale = lerp(cur.hero.scale, targetComp.hero.scale, damp(compLambda, dt));
+    /* lerp supports */
+    for(const role in targetComp.supports){
+      const t = targetComp.supports[role];
+      const c = cur.supports[role] || {};
+      if(typeof t.x === 'number') c.x = lerp(c.x || t.x, t.x, damp(compLambda, dt));
+      if(typeof t.y === 'number') c.y = lerp(c.y || t.y, t.y, damp(compLambda, dt));
+      if(typeof t.scale === 'number') c.scale = lerp(c.scale || t.scale, t.scale, damp(compLambda, dt));
+      if(typeof t.rotZ === 'number') c.rotZ = lerp(c.rotZ || t.rotZ, t.rotZ, damp(compLambda, dt));
+      if(typeof t.rotY === 'number') c.rotY = lerp(c.rotY || t.rotY, t.rotY, damp(compLambda, dt));
+      if(typeof t.opacity === 'number') c.opacity = lerp(c.opacity == null ? t.opacity : c.opacity, t.opacity, damp(compLambda, dt));
+      cur.supports[role] = c;
+    }
+
+    /* === 5) Hero Motion ===
+       Hero card 在 beat 内的特殊 motion (releasing/incoming/discovering) */
+    const heroMotion = window.HeroDirector.getHeroMotion(phase, phaseProgress);
+
+    /* === 6) 每张 card 的 transform ===
+       hero = HERO card (slot 0)
+       其他 = composition.supports[role] */
     const rect = dom.carousel.getBoundingClientRect();
-    const handoffMotion = (handoff)
-      ? window.HeroDirector.getHandoffMotionForCard(handoff, 'HERO')
-      : null;
-    const outgoingMotion = window.HeroDirector.getOutgoingMotion(scene, 'FG_LEFT');
-
     for(let i=0;i<NUM_CARDS;i++){
-      const slotBase = window.HeroDirector.SLOTS[i];
       const card = cards[i];
+      const slotRole = SLOT_ROLES[i];
 
-      /* Composition modifier — 当前 hero photo 决定整个场景 archetype
-         不同的 archetype 给同样的 slot 完全不同的视觉位置/可见性 */
-      const heroPhotoIdx = scene.photoForSlot[0];
-      const heroComposition = window.HeroDirector.getPhotoComposition(heroPhotoIdx);
-      const compMod = window.HeroDirector.getCompositionModifiers(heroComposition, slotBase.name);
+      let px, py, pz, scale, opacity, blur, rotZ, rotY;
 
-      /* INTRO Staggered Reveal — 开场时,每张 slot 以不同延迟 fade in
-         这样用户进入页面后,卡片是"一张一张被发现",不是"全部一起 boom"
-         handoff 期间忽略(因为已经在动了) */
-      let introFactor = 1.0;
-      if(!handoff && time < window.HeroDirector.INTRO_DURATION){
-        introFactor = window.HeroDirector.getIntroReveal(i, time);
-        // introFactor 0→1 范围内,opacity 跟随,scale 从 0.3 渐变到 1
-      }
-
-      /* INTRO 期间强制让所有 card 可见(忽略 composition 的 visibility=0 隐藏)
-         确保开场时是"丰富场景"而不是"只有 Hero 孤独"
-         在 INTRO_DURATION 之后,compMod.visibility 才生效 */
-      let effectiveVisibility = compMod.visibility;
-      if(time < window.HeroDirector.INTRO_DURATION){
-        effectiveVisibility = Math.max(compMod.visibility, 0.4);  // INTRO 期间每张卡至少 0.4 opacity
-      }
-
-      /* Slot 像素位置 */
-      let px = (slotBase.x - 50) / 100 * rect.width;
-      let py = (slotBase.y - 50) / 100 * rect.height;
-      let pz = slotBase.z;
-      // intro reveal: scale 从 0.3 渐变到 1
-      const introScale = introFactor === 1.0 ? 1.0 : (0.3 + 0.7 * introFactor);
-      let scale = slotBase.scale * compMod.scaleMul * introScale;
-      let opacity = slotBase.opacity * effectiveVisibility * introFactor;
-      let blur = slotBase.blur;
-      let slotRotZ = (slotBase.rotZ || 0) + (compMod.rotOffset?.z || 0);
-      let slotRotY = (slotBase.rotY || 0) + (compMod.rotOffset?.y || 0);
-      let slotRotX = (slotBase.rotX || 0) + (compMod.rotOffset?.x || 0);
-
-      /* composition 调整 slot 位置 */
-      px *= compMod.posMul.x;
-      py *= compMod.posMul.y;
-      pz *= compMod.posMul.z;
-
-      /* intro reveal: 让未出现的卡片从更深 BG/远处开始,
-         用更深的 z + 微旋转让 fade in 有"从深处浮现"的感觉 */
-      if(introFactor < 1.0){
-        pz -= 300 * (1 - introFactor);  // 没出现的卡片 z 推得更远
-        // 出现时附带的轻微"镜头发现"微抖
-        slotRotZ += Math.sin(introFactor * Math.PI) * 6;  // 中点时 +6度抖动
-      }
-
-      /* 如果 composition 完全隐藏这个 slot,跳过详细 transform 计算 */
-      const isHidden = (compMod.visibility <= 0.05 && !handoff);
-
-      /* === HERO card (slot 0) ===
-         在 handoff 期间,根据 handoffMotion 从 BG 推进到 HERO */
-      if(i === 0 && handoffMotion){
-        // 用 motion 覆盖 base position
-        // dx/dy 是绝对像素(可以 ±1500px)
-        // dz 是 z 偏移(可以 ±1500)
-        px += handoffMotion.dx;
-        py += handoffMotion.dy;
-        pz += handoffMotion.dz;
-        scale += handoffMotion.scaleDelta;
-        opacity = handoffMotion.opacity; // 完全由 motion 决定(从屏幕外飞入)
-        blur = handoffMotion.blur;
-        // rotation
-        card.target.rotZ = handoffMotion.rotZ || 0;
-        card.target.rotY = handoffMotion.rotY || 0;
-        card.target.rotX = handoffMotion.rotX || 0;
-      } else {
-        // Hero 在平时保持轻微电影感旋转
-        card.target.rotZ = 0;
-        card.target.rotY = 0;
-        card.target.rotX = 0;
-      }
-
-      /* === FG_LEFT card (slot 1) ===
-         如果 scene.outgoingIdx 不为 null,这张卡显示旧 hero,正在退场 */
-      if(i === 1 && outgoingMotion){
-        if(outgoingMotion.dxRatio !== undefined){
-          px += outgoingMotion.dxRatio * rect.width;
-        } else {
-          px += outgoingMotion.dx || 0;
-        }
-        if(outgoingMotion.dyRatio !== undefined){
-          py += outgoingMotion.dyRatio * rect.height;
-        } else {
-          py += outgoingMotion.dy || 0;
-        }
-        pz += outgoingMotion.dz;
-        scale += outgoingMotion.scaleDelta;
-        opacity += outgoingMotion.opacityDelta;
-        blur += outgoingMotion.blurDelta;
-        card.target.rotZ = outgoingMotion.rotZ || 0;
-        card.target.rotY = outgoingMotion.rotY || 0;
-      } else if(i === 0 && !handoff){
-        // Hero 在平时也用 photo signature (轻微的)
-        const heroOffset = window.HeroDirector.getPhotoSignature(scene.photoForSlot[0]);
-        card.target.rotZ = (heroOffset.rotZ || 0) * 0.3;
-        card.target.rotY = (heroOffset.rotY || 0) * 0.3;
-        // Hero 也接收微位置偏移(±10px)
-        card.target.rotX = 0;  // 重置 rotX(会被下面 line 加上 drift)
-      } else if(i !== 0 && i !== 1) {
-        /* 非 HERO/FG_LEFT 卡片: 应用 slot base 的 rotation + photo signature + cinematic drift */
-        const photoForThisSlot = (i === 1)
-          ? scene.photoForSlot[1]
-          : scene.photoForSlot[i];
-        const photoSig = window.HeroDirector.getPhotoSignature(photoForThisSlot);
-        card.target.rotZ = slotRotZ + (photoSig.rotZ || 0);
-        card.target.rotY = slotRotY + (photoSig.rotY || 0);
-      }
-
-      /* === handoff 期间,非 HERO/FG_LEFT 卡片保持 SLOTS 位置,但轻微 blur/opacity 调整 === */
-      if(handoff){
-        if(i !== 0 && i !== 1){
-          // 配角:在 CROSS 阶段(0.6~0.85)轻微退后,景深加强
-          if(handoff._progress > 0.60){
-            const k = smoothstep(clamp((handoff._progress - 0.60) / 0.25, 0, 1));
-            opacity -= k * 0.10;
-            blur += k * 0.3;
-          }
-        }
-      }
-
-      /* === Cinematic Parallax Drift ===
-         每张背景卡片(非 Hero/FG_LEFT)持续做微弱的视差漂浮:
-           - 按 depth cluster (BG > MG > FG > Hero) 分组振幅
-           - 同一 cluster 内卡片有 phase offset 但频率相同
-           - 营造"群体记忆在空间中缓缓飘动"的感觉
-      */
-      let driftX = 0, driftY = 0, driftRZ = 0;
-      let photoOffX = 0, photoOffY = 0, photoScaleD = 0, photoBlurD = 0;
-      // 所有非 hero/FG_LEFT 卡片(无论 handoff 与否)接收 photo signature 的微位置
-      if(i !== 0 && i !== 1){
-        const photoForSig = (i === 1)
-          ? scene.photoForSlot[1]
-          : scene.photoForSlot[i];
-        const photoSig = window.HeroDirector.getPhotoSignature(photoForSig);
-        // 微位置:让相同 slot 内的不同照片真正错开(避免重叠)
-        photoOffX = photoSig.offX || 0;
-        photoOffY = photoSig.offY || 0;
-        photoScaleD = photoSig.scaleDelta || 0;
-        photoBlurD = photoSig.blurDelta || 0;
-      }
-      if(i !== 0 && i !== 1 && !handoff){
-        // cluster base freq (BG 卡慢,FG 卡略快)
-        const clusterFreq = (slotBase.z < -500) ? 0.08 : (slotBase.z < -200 ? 0.11 : 0.15);
-        // phase 用 card index 偏移避免完全同步
-        const phaseBase = i * 0.83;
-        // depth-modulated 振幅:越远越弱
-        const depthFactor = clamp(1 + slotBase.z / 500, 0.15, 1.4);
-        // 用 sin 的二次方制造 "缓慢漂浮" 而非 "规律摆动"
-        const wave = Math.sin(t * clusterFreq + phaseBase);
-        // INTRO 期间 (0-6s) 大幅降低 drift — 让卡片 fade in 后保持"站立"感,不立即开始运动
-        // INTRO 后也保持克制: 用 0.25 系数(整体更安静)
-        let driftAmpMul = 0.25;
-        if(time < 6){
-          // INTRO: 卡片几乎不动 (只有 reveal 时的浮入)
-          driftAmpMul = 0;
-        }
-        driftX = wave * 5 * depthFactor * driftAmpMul;
-        driftY = Math.cos(t * clusterFreq * 0.7 + phaseBase * 0.6) * 3 * depthFactor * driftAmpMul;
-        driftRZ = Math.sin(t * clusterFreq * 0.5 + phaseBase * 1.3) * 0.5 * depthFactor * driftAmpMul;
-      }
-
-      /* 极轻微 breathing — 不随机旋转,只在 hero 处允许 ±1.5px scale breathing */
-      let breathX = 0, breathY = 0;
       if(i === 0){
-        // INTRO 期间 hero 也基本静止
-        const breathMul = time < 6 ? 0.2 : 1.0;
-        breathX = Math.sin(t*0.4) * 1.2 * breathMul;
-        breathY = Math.cos(t*0.5) * 0.8 * breathMul;
+        // HERO card
+        const heroPos = cur.hero;
+        px = (heroPos.x - 50) / 100 * rect.width + camLive.x;
+        py = (heroPos.y - 50) / 100 * rect.height + camLive.y;
+        pz = heroPos.z + camLive.z;
+        scale = heroPos.scale * heroMotion.scaleMul;
+        opacity = heroMotion.opacityMul;
+        blur = heroMotion.blurMul;
+        rotZ = (heroPos.rotZ || 0) + heroMotion.rotZ;
+        rotY = (heroPos.rotY || 0) + heroMotion.rotY;
+      } else {
+        // Supporting card
+        const sPos = cur.supports[slotRole] || {};
+        // 如果 composition 是 isolation,opacity=0,直接 hide
+        if(typeof sPos.opacity === 'number' && sPos.opacity <= 0.01){
+          card.el.style.opacity = '0';
+          card.el.style.zIndex = '0';
+          continue;
+        }
+        if(typeof sPos.x !== 'number'){
+          // 没定义的 slot (例如 isolation 中的所有 supports),跳过
+          card.el.style.opacity = '0';
+          card.el.style.zIndex = '0';
+          continue;
+        }
+        px = (sPos.x - 50) / 100 * rect.width + camLive.x;
+        py = (sPos.y - 50) / 100 * rect.height + camLive.y;
+        pz = (sPos.z || -400) + camLive.z;
+        scale = sPos.scale || 0.3;
+        opacity = sPos.opacity || 0;
+        blur = 0;
+        rotZ = sPos.rotZ || 0;
+        rotY = sPos.rotY || 0;
       }
 
       /* 写入 target */
-      const targetX = px + driftX + breathX + photoOffX - camLive.x * 0.4;
-      const targetY = py + driftY + breathY + photoOffY - camLive.y * 0.4;
-      const targetZ = pz - camLive.z * 0.3;
-      card.target.x = targetX;
-      card.target.y = targetY;
-      card.target.z = targetZ;
-      card.target.rotZ = (card.target.rotZ || 0) + driftRZ;
-
-      // Hero 卡片适度大小,配角更小(让 Hero 不会巨大铺满)
-      if(i === 0){
-        // Hero — 中等尺寸,留出 breathing room
-        card.target.w = 440;
-        card.target.h = 560;
-      } else if(i === 1 || i === 2){
-        // FG_LEFT / FG_RIGHT — 前层,稍大,但不能盖过 Hero
-        card.target.w = 340;
-        card.target.h = 420;
-      } else if(i === 3){
-        // FG_BOTTOM — 前层遮挡,更窄
-        card.target.w = 280;
-        card.target.h = 360;
-      } else {
-        // MG/BG — 根据 z 深度计算尺寸:越远越小
-        const baseW = 260;
-        const baseH = 330;
-        const zFactor = clamp(1 + slotBase.z / 350, 0.45, 1.0);
-        card.target.w = baseW * zFactor;
-        card.target.h = baseH * zFactor;
-      }
-      card.target.scale = scale + photoScaleD;
-      card.target.blur = blur + photoBlurD;
+      card.target.x = px;
+      card.target.y = py;
+      card.target.z = pz;
+      const sz = cardSizeForSlot(slotRole);
+      card.target.w = sz.w * scale;
+      card.target.h = sz.h * scale;
+      card.target.scale = 1;  // scale 已合并到 w/h
+      card.target.rotZ = rotZ;
+      card.target.rotY = rotY;
+      card.target.rotX = 0;
+      card.target.blur = blur;
       card.target.opacity = opacity;
-      card.target.brightness = (i === 0 ? 1.05 : (i === 1 || i === 2 || i === 3 ? 0.92 : 0.78));
+      card.target.brightness = (i === 0 ? 1.05 : (i < 3 ? 0.92 : 0.78));
       card.target.saturate = (i === 0 ? 1.05 : 0.95);
 
-      /* Lerp live → target */
+      /* Lerp live → target — 不同 phase 用不同 damping */
       const L = card.live;
-      /* Hero card (i===0) 在 handoff 期间需要快速跟踪大幅 motion */
       let lambda;
-      if(i === 0 && handoffMotion){
-        lambda = 7.0;  // 高追踪速度,让飞入动作快速到位
-      } else if(i === 0){
-        lambda = 4.5;
+      if(phase === 'locked'){
+        lambda = 4.0;  // LOCKED 时快速稳定(让画面几乎静止)
       } else {
-        lambda = 3.5;
+        lambda = 5.0;  // 过渡时跟随运动
       }
       L.x = lerp(L.x, card.target.x, damp(lambda, dt));
       L.y = lerp(L.y, card.target.y, damp(lambda, dt));
       L.z = lerp(L.z, card.target.z, damp(lambda, dt));
       L.w = lerp(L.w, card.target.w, damp(lambda*0.7, dt));
       L.h = lerp(L.h, card.target.h, damp(lambda*0.7, dt));
-      L.scale = lerp(L.scale, card.target.scale, damp(lambda, dt));
+      L.scale = card.target.scale;
       L.rotX  = lerp(L.rotX,  card.target.rotX || 0, damp(lambda*0.8, dt));
       L.rotY  = lerp(L.rotY,  card.target.rotY || 0, damp(lambda*0.8, dt));
       L.rotZ  = lerp(L.rotZ,  card.target.rotZ || 0, damp(lambda*0.8, dt));
       L.blur  = lerp(L.blur,  card.target.blur, damp(lambda*1.4, dt));
       L.opacity = lerp(L.opacity, card.target.opacity, damp(lambda*1.2, dt));
-      L.brightness = lerp(L.brightness, card.target.brightness, damp(lambda, dt));
-      L.saturate   = lerp(L.saturate,   card.target.saturate,   damp(lambda, dt));
+      L.brightness = card.target.brightness;
+      L.saturate   = card.target.saturate;
 
       /* is-main class */
       if(i === 0){
@@ -615,7 +397,7 @@
       card.el.style.filter = `blur(${L.blur.toFixed(2)}px) brightness(${L.brightness.toFixed(3)}) saturate(${L.saturate.toFixed(3)})`;
     }
 
-    /* === 5) Hero Light 跟随 HERO card 位置 === */
+    /* === 7) Hero Light 跟随 hero position === */
     if(dom.fx.heroLight){
       const heroCard = cards[0];
       const carouselRect = dom.carousel.getBoundingClientRect();
@@ -623,11 +405,14 @@
       const heroScreenY = carouselRect.top  + carouselRect.height / 2 + heroCard.live.y;
       const vpX = (heroScreenX / window.innerWidth) * 100;
       const vpY = (heroScreenY / window.innerHeight) * 100;
-      // 基础 opacity 0.10; handoff 期间略增(0.20)
+      // base opacity 0.10; INCOMING/RELEASING 略增强
       let op = 0.10;
-      if(handoff){
-        const k = Math.sin(handoff._progress * Math.PI);
+      if(phase === 'incoming'){
+        const k = Math.sin(phaseProgress * Math.PI);
         op = 0.10 + k * 0.10;
+      } else if(phase === 'locked'){
+        // 静止,只有极轻微 breathing
+        op = 0.10 + Math.sin(t * 0.5) * 0.02;
       }
       dom.fx.heroLight.style.setProperty('--hero-x', vpX.toFixed(1));
       dom.fx.heroLight.style.setProperty('--hero-y', vpY.toFixed(1));
@@ -635,60 +420,77 @@
       dom.fx.heroLight.style.setProperty('--hero-op', op.toFixed(3));
     }
 
-    /* === 6) 粒子 === */
+    /* === 8) 粒子 (静止,只微闪) === */
     particles.forEach(p => {
-      p.x += p.vx;
-      p.y += p.vy;
-      if(p.x < 0) p.x = 100;
-      if(p.x > 100) p.x = 0;
-      if(p.y < 0) p.y = 100;
-      if(p.y > 100) p.y = 0;
-      const opacity = (0.25 + Math.sin(t*0.5 + p.phase)*0.2) * 0.6;
+      // 粒子不再 random 移动,只 opacity 微闪
+      const opacity = (0.18 + Math.sin(t*0.5 + p.phase)*0.10) * 0.6;
       p.el.style.transform = `translate3d(${p.x}vw, ${p.y}vh, 0)`;
       p.el.style.opacity = opacity.toFixed(3);
     });
 
-    /* === 7) fx 元素基础 opacity === */
-    // vignette 始终
-    if(dom.fx.vignette){
-      const baseOp = 0.85;
-      dom.fx.vignette.style.setProperty('--fx-op', baseOp.toFixed(3));
-    }
-    // leak 始终微弱
+    /* === 9) fx 元素基础 opacity === */
+    if(dom.fx.vignette) dom.fx.vignette.style.setProperty('--fx-op', '0.85');
     if(dom.fx.leak){
-      const op = 0.25 + Math.sin(t*0.13)*0.05;
+      const op = 0.20 + Math.sin(t*0.13)*0.05;
       dom.fx.leak.style.setProperty('--fx-op', op.toFixed(3));
-      dom.fx.leak.style.transform = `translateX(${Math.sin(t*0.12)*3}%)`;
+      dom.fx.leak.style.transform = `translateX(${Math.sin(t*0.12)*2}%)`;
     }
-    // stars 始终,微闪
     if(dom.fx.stars){
       const flick = 0.65 + Math.sin(t*1.7)*0.12;
       dom.fx.stars.style.opacity = flick.toFixed(3);
       dom.fx.stars.style.setProperty('--fx-op', '1');
     }
-    // particles layer 始终
-    if(dom.fx.particles){
-      dom.fx.particles.style.setProperty('--fx-op', '0.5');
-    }
-    // grain 始终
-    if(dom.fx.grain){
-      dom.fx.grain.style.setProperty('--fx-op', '0.25');
-    }
-    // scanlines / rgb 仅 handoff 期间
+    if(dom.fx.particles) dom.fx.particles.style.setProperty('--fx-op', '0.4');
+    if(dom.fx.grain) dom.fx.grain.style.setProperty('--fx-op', '0.20');
+    // scanlines / rgb 仅 beat transition 期间轻微出现
     if(dom.fx.scan){
-      const op = handoff ? 0.15 * Math.sin(handoff._progress * Math.PI) : 0;
+      const op = (phase === 'incoming' || phase === 'releasing') ? 0.10 * Math.sin(phaseProgress * Math.PI) : 0;
       dom.fx.scan.style.setProperty('--fx-op', op.toFixed(3));
     }
     if(dom.fx.rgb){
-      const op = handoff ? 0.10 * Math.sin(handoff._progress * Math.PI) : 0;
+      const op = phase === 'incoming' ? 0.08 * Math.sin(phaseProgress * Math.PI) : 0;
       dom.fx.rgb.style.setProperty('--fx-op', op.toFixed(3));
     }
 
-    /* === 8) 歌词 === */
+    /* === 10) 歌词 === */
     updateLyrics(time);
 
     rafId = requestAnimationFrame(tick);
   }
+
+  /* ===================== 粒子 ===================== */
+  const MAX_PARTICLES = 8;
+  const particles = [];
+  const particleRng = (function(){
+    let s = 91732191;
+    return () => { s = (s*1103515245+12345) & 0x7fffffff; return s / 0x80000000; };
+  })();
+  function initParticles(){
+    for(let i=0;i<MAX_PARTICLES;i++){
+      const p = document.createElement('div');
+      p.className = 'ambient-particle';
+      const w = (1.5 + particleRng()*2);
+      p.style.width = w + 'px';
+      p.style.height = p.style.width;
+      p.style.opacity = '0';
+      dom.layerParts.appendChild(p);
+      particles.push({
+        el:p, x: particleRng()*100, y: particleRng()*100,
+        phase: particleRng()*Math.PI*2, w,
+      });
+    }
+  }
+  initParticles();
+
+  /* ===================== 唱片封面 fallback ===================== */
+  function imgFallback(imgEl){
+    imgEl.addEventListener('error', function(){
+      if(this.dataset.fallbackApplied === '1') return;
+      this.dataset.fallbackApplied = '1';
+      this.src = 'img/1.jpg';
+    });
+  }
+  imgFallback(dom.diskCover);
 
   /* ===================== 辅助 ===================== */
   let cachedRect = null;
@@ -774,23 +576,18 @@
     if(window.Router) window.Router.go('interactive');
   });
 
-  /* 唱片封面 — 每 4s 切换一次,但不与 hero 同 */
+  /* 唱片封面 */
   let currentVinylIdx = -1;
   let vinylSwapTimer = null;
   function nextVinylIdx(){
     const total = (typeof NUM_PHOTOS !== 'undefined' ? NUM_PHOTOS : 42);
-    let heroIdx = -1;
-    try {
-      const sc = window.HeroDirector.getSceneState(window.musicBox ? window.musicBox.currentTime : 0, total);
-      heroIdx = sc.photoForSlot[0];
-    } catch(e){}
     let idx;
     let attempts = 0;
     do {
       idx = Math.floor(Math.random() * total);
       attempts++;
-    } while((idx === heroIdx || idx === currentVinylIdx) && attempts < 30);
-    return idx === heroIdx ? -1 : idx;
+    } while((idx === currentVinylIdx) && attempts < 30);
+    return idx;
   }
   function swapVinyl(){
     const idx = nextVinylIdx();
@@ -820,9 +617,6 @@
   function startRAF(){
     if(rafId) return;
     if(reduceMotion){
-      const slot = window.HeroDirector.SLOTS[0];
-      const heroSrc = getPhotoSrc(0);
-      cards.forEach((c,i) => setCardImage(c, getPhotoSrc(i)));
       return;
     }
     lastT = performance.now();
@@ -838,15 +632,14 @@
 
   /* 初始化 */
   if(dom.totalTime) dom.totalTime.textContent = formatTime(getTotalDuration());
-  // 立即设置 initial photos (slot 0 = hero, 1..8 = initial pool)
-  const numPhotos = (typeof NUM_PHOTOS !== 'undefined') ? NUM_PHOTOS : 42;
-  const initScene = window.HeroDirector.getSceneState(0, numPhotos);
-  initScene.photoForSlot.forEach((photoIdx, i) => {
+  // 初始化场景 (让 HeroDirector 知道 photo 总数)
+  window.HeroDirector.initScene(typeof NUM_PHOTOS !== 'undefined' ? NUM_PHOTOS : 42);
+  const initScene = window.HeroDirector.getBeatState(0, typeof NUM_PHOTOS !== 'undefined' ? NUM_PHOTOS : 42);
+  initScene.scenePhotoIndices.forEach((photoIdx, i) => {
     cardCurrentPhoto[i] = photoIdx;
     setCardImage(cards[i], getPhotoSrc(photoIdx));
   });
 
-  // 在 lyricsData 准备好后构建 EVENT_TIMELINE
   startRAF();
   window._memoriesStart = startRAF;
   window._memoriesStop  = stopRAF;
